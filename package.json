@@ -33,7 +33,7 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "tsx scripts/smoke.ts",
+    "smoke": "tsx --env-file-if-exists=.env scripts/smoke.ts",
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
     "prepublishOnly": "npm run build"
   },
