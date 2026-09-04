@@ -1,0 +1,16 @@
+{
+  "images": [
+    {
+      "tag": "registry.depot.dev/proj_api7f2:main",
+      "digest": "sha256:8f21c0b6a4d95e37f0182c4b9ae6d5f3c2b1a0998877665544332211aabbccdd",
+      "pushedAt": "2026-09-03T18:24:02Z",
+      "sizeBytes": "184320000"
+    },
+    {
+      "tag": "registry.depot.dev/proj_api7f2:v1.4.0",
+      "digest": "sha256:1122334455667788990011223344556677889900aabbccddeeff001122334455",
+      "pushedAt": "2026-08-28T10:11:44Z",
+      "sizeBytes": "183500800"
+    }
+  ]
+}

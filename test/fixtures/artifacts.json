@@ -1,0 +1,16 @@
+{
+  "artifacts": [
+    {
+      "artifactId": "art_7c21aa",
+      "name": "junit-results.xml",
+      "sizeBytes": "184216",
+      "createdAt": "2026-09-03T14:09:40Z"
+    },
+    {
+      "artifactId": "art_8d32bb",
+      "name": "coverage/lcov.info",
+      "sizeBytes": "2418880",
+      "createdAt": "2026-09-03T14:09:41Z"
+    }
+  ]
+}

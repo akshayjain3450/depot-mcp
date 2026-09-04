@@ -1,0 +1,26 @@
+{
+  "lines": [
+    {
+      "stepKey": "checkout",
+      "timestampMs": "1788444140000",
+      "lineNumber": 1,
+      "stream": "STREAM_STDOUT",
+      "body": "Cloning into '/work/api'..."
+    },
+    {
+      "stepKey": "install",
+      "timestampMs": "1788444144000",
+      "lineNumber": 2,
+      "stream": "STREAM_STDOUT",
+      "body": "added 812 packages in 6s"
+    },
+    {
+      "stepKey": "run-tests",
+      "timestampMs": "1788444150000",
+      "lineNumber": 3,
+      "stream": "STREAM_STDOUT",
+      "body": "RUN v3.2.0 /work/api"
+    }
+  ],
+  "nextPageToken": "cursor-page-2"
+}

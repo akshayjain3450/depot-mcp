@@ -1,0 +1,38 @@
+{
+  "runs": [
+    {
+      "runId": "run_7f3d9c21",
+      "repo": "acme/api",
+      "ref": "refs/heads/main",
+      "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+      "trigger": "push",
+      "status": "STATUS_FAILED",
+      "createdAt": "2026-09-03T14:02:11Z",
+      "startedAt": "2026-09-03T14:02:19Z",
+      "finishedAt": "2026-09-03T14:09:47Z"
+    },
+    {
+      "runId": "run_6e2c8b10",
+      "repo": "acme/api",
+      "ref": "refs/pull/412/merge",
+      "sha": "5a5b5c5d5e5f60718293a4b5c6d7e8f901234567",
+      "trigger": "pull_request",
+      "pr": 412,
+      "status": "STATUS_FINISHED",
+      "createdAt": "2026-09-03T11:40:02Z",
+      "startedAt": "2026-09-03T11:40:08Z",
+      "finishedAt": "2026-09-03T11:45:31Z"
+    },
+    {
+      "runId": "run_5d1b7a09",
+      "repo": "acme/api",
+      "ref": "refs/heads/main",
+      "sha": "0f0e0d0c0b0a09080706050403020100ffeeddcc",
+      "trigger": "workflow_dispatch",
+      "status": "STATUS_RUNNING",
+      "createdAt": "2026-09-03T09:15:00Z",
+      "startedAt": "2026-09-03T09:15:06Z"
+    }
+  ],
+  "nextPageToken": "eyJvZmZzZXQiOjN9"
+}

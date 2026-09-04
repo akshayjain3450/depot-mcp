@@ -1,0 +1,33 @@
+{
+  "builds": [
+    {
+      "buildId": "bld_4a91c7",
+      "status": 2,
+      "createdAt": "2026-09-03T18:20:00Z",
+      "startedAt": "2026-09-03T18:20:04Z",
+      "finishedAt": "2026-09-03T18:23:19Z",
+      "buildDurationSeconds": 195,
+      "savedDurationSeconds": 412,
+      "cachedSteps": 11,
+      "totalSteps": 14
+    },
+    {
+      "buildId": "bld_3f80ab",
+      "status": 3,
+      "createdAt": "2026-09-03T16:02:00Z",
+      "buildDurationSeconds": 64,
+      "savedDurationSeconds": 530,
+      "cachedSteps": 13,
+      "totalSteps": 14
+    },
+    {
+      "buildId": "bld_2c11de",
+      "status": 3,
+      "createdAt": "2026-09-02T22:41:00Z",
+      "buildDurationSeconds": 611,
+      "savedDurationSeconds": 0,
+      "cachedSteps": 0,
+      "totalSteps": 14
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "build": {
+    "buildId": "bld_4a91c7",
+    "status": 2,
+    "createdAt": "2026-09-03T18:20:00Z",
+    "startedAt": "2026-09-03T18:20:04Z",
+    "finishedAt": "2026-09-03T18:23:19Z",
+    "buildDurationSeconds": 195,
+    "savedDurationSeconds": 412,
+    "cachedSteps": 11,
+    "totalSteps": 14
+  }
+}

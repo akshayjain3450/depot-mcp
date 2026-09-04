@@ -1,0 +1,11 @@
+{
+  "logs": [
+    { "message": "> api@1.4.0 build", "timestamp": "2026-09-03T18:21:42Z" },
+    { "message": "> tsc -p tsconfig.build.json", "timestamp": "2026-09-03T18:21:42Z" },
+    {
+      "message": "src/billing/invoice.ts(88,24): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+      "timestamp": "2026-09-03T18:23:15Z"
+    },
+    { "message": "Found 1 error in src/billing/invoice.ts:88", "timestamp": "2026-09-03T18:23:16Z" }
+  ]
+}

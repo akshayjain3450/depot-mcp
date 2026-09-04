@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "projectId": "proj_api7f2",
+      "organizationId": "org_1a2b3c",
+      "name": "api",
+      "regionId": "us-east-1",
+      "createdAt": "2025-05-12T09:14:00Z",
+      "cachePolicy": { "keepDays": 14, "keepGb": 50 },
+      "hardware": "HARDWARE_16X32"
+    },
+    {
+      "projectId": "proj_web3c9",
+      "organizationId": "org_1a2b3c",
+      "name": "web",
+      "regionId": "eu-central-1",
+      "createdAt": "2025-08-20T16:41:00Z",
+      "cachePolicy": { "keepDays": 7, "keepGb": 100 },
+      "hardware": 5
+    }
+  ]
+}

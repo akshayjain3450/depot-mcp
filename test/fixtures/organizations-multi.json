@@ -1,0 +1,14 @@
+{
+  "organizations": [
+    {
+      "orgId": "org_1a2b3c",
+      "name": "Acme Engineering",
+      "createdAt": "2025-04-01T10:00:00Z"
+    },
+    {
+      "orgId": "org_9z8y7x",
+      "name": "Acme Labs",
+      "createdAt": "2026-01-19T08:30:00Z"
+    }
+  ]
+}

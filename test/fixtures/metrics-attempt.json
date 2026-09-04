@@ -1,0 +1,12 @@
+{
+  "attemptId": "att_91bc02",
+  "capturedAt": "2026-09-03T14:09:47Z",
+  "peakMemoryBytes": "8577351680",
+  "memoryLimitBytes": "8589934592",
+  "avgCpuPercent": 62.4,
+  "peakCpuPercent": 99.1,
+  "samples": [
+    { "atMs": "1756900010000", "memoryBytes": "2147483648", "cpuPercent": 41.0 },
+    { "atMs": "1756900020000", "memoryBytes": "8577351680", "cpuPercent": 99.1 }
+  ]
+}

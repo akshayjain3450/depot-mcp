@@ -1,0 +1,157 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "STATE_GROUPED_FAILURES",
+  "target": {
+    "targetId": "run_7f3d9c21",
+    "targetType": "TARGET_TYPE_RUN",
+    "status": "STATUS_FAILED"
+  },
+  "context": {
+    "runId": "run_7f3d9c21",
+    "repo": "acme/api",
+    "ref": "refs/heads/main",
+    "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+    "headSha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+    "trigger": "push",
+    "runStatus": "STATUS_FAILED",
+    "workflowId": "wf_2b8e11",
+    "workflowName": "CI",
+    "workflowPath": ".github/workflows/ci.yml",
+    "workflowStatus": "STATUS_FAILED",
+    "truncatedContextFields": ["jobDisplayName"]
+  },
+  "bounds": {
+    "failedProblemCandidateCount": 6,
+    "failedProblemCandidateCap": 25,
+    "totalProblemJobCount": 6,
+    "skippedDependentCount": 2,
+    "totalFailureGroupCount": 3,
+    "omittedFailureGroupCount": 1,
+    "failureGroupLimit": 2,
+    "representativesPerGroupLimit": 2,
+    "recentAttemptLimit": 5,
+    "totalAttemptCount": 8,
+    "omittedAttemptCount": 3,
+    "relevantLineLimit": 20,
+    "errorLineBodyCharLimit": 2000,
+    "errorMessageCharLimit": 4000,
+    "contextLabelCharLimit": 200,
+    "truncated": true
+  },
+  "failureGroups": [
+    {
+      "fingerprint": "b7c1e40af9d2",
+      "source": "test",
+      "count": 4,
+      "errorMessage": "AssertionError: expected 200 to equal 503",
+      "errorMessageTruncated": false,
+      "errorMessageOriginalLength": 41,
+      "diagnosis": "The health endpoint returns 503 because the Redis client has not finished connecting when the test suite starts.",
+      "possibleFix": "Await the Redis connection in the test setup hook before the first request, or add a readiness wait to the health check.",
+      "representatives": [
+        {
+          "runId": "run_7f3d9c21",
+          "workflowId": "wf_2b8e11",
+          "jobId": "job_4d0a77",
+          "jobKey": "test (18)",
+          "attemptId": "att_91bc02",
+          "attempt": 1,
+          "attemptStatus": "STATUS_FINISHED",
+          "attemptConclusion": "CONCLUSION_FAILED",
+          "errorMessage": "AssertionError: expected 200 to equal 503",
+          "diagnosis": "Redis was still connecting when the first request landed.",
+          "possibleFix": "Await the Redis connection in beforeAll.",
+          "relevantLines": [
+            {
+              "stepId": "run-tests",
+              "lineNumber": 142,
+              "content": "FAIL tests/api/health.test.ts > health endpoint > returns 200",
+              "contentTruncated": false
+            },
+            {
+              "stepId": "run-tests",
+              "lineNumber": 143,
+              "content": "AssertionError: expected 200 to equal 503",
+              "contentTruncated": false
+            },
+            {
+              "stepId": "run-tests",
+              "lineNumber": 144,
+              "content": "    at tests/api/health.test.ts:42:18",
+              "contentTruncated": false
+            },
+            {
+              "stepId": "run-tests",
+              "lineNumber": 145,
+              "content": "Tests  1 failed | 128 passed (129)",
+              "contentTruncated": false
+            }
+          ],
+          "nextCommands": [
+            {
+              "kind": "NEXT_COMMAND_KIND_LOGS",
+              "targetId": "att_91bc02",
+              "label": "View logs for test (18)",
+              "argv": ["depot", "ci", "logs", "att_91bc02"]
+            }
+          ]
+        }
+      ],
+      "omittedRepresentativeCount": 3
+    },
+    {
+      "fingerprint": "3f0aa1cc8e77",
+      "source": "build",
+      "count": 1,
+      "errorMessage": "error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+      "errorMessageTruncated": false,
+      "diagnosis": "A type error in src/billing/invoice.ts was introduced by this commit.",
+      "possibleFix": "Coerce the id to a number, or widen the parameter type.",
+      "representatives": [
+        {
+          "runId": "run_7f3d9c21",
+          "workflowId": "wf_2b8e11",
+          "jobId": "job_88ffab",
+          "jobKey": "typecheck",
+          "attemptId": "att_55de10",
+          "attempt": 1,
+          "attemptStatus": "STATUS_FINISHED",
+          "attemptConclusion": "CONCLUSION_FAILED",
+          "errorMessage": "error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+          "relevantLines": [
+            {
+              "stepId": "typecheck",
+              "lineNumber": 18,
+              "content": "src/billing/invoice.ts(88,24): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.",
+              "contentTruncated": false
+            }
+          ],
+          "nextCommands": []
+        }
+      ],
+      "omittedRepresentativeCount": 0
+    }
+  ],
+  "representativeAttempts": [],
+  "nextCommands": [
+    {
+      "kind": "NEXT_COMMAND_KIND_DIAGNOSE_JOB",
+      "targetId": "job_4d0a77",
+      "label": "Diagnose job test (18)",
+      "argv": ["depot", "ci", "diagnose", "--job", "job_4d0a77"]
+    },
+    {
+      "kind": "NEXT_COMMAND_KIND_LOGS",
+      "targetId": "att_91bc02",
+      "label": "View logs for test (18)",
+      "argv": ["depot", "ci", "logs", "att_91bc02"]
+    },
+    {
+      "kind": "NEXT_COMMAND_KIND_SUMMARY",
+      "targetId": "job_4d0a77",
+      "label": "View step summary",
+      "argv": ["depot", "ci", "summary", "job_4d0a77"]
+    }
+  ],
+  "overLimitBreakdown": []
+}
