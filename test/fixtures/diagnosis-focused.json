@@ -1,0 +1,91 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "STATE_FOCUSED_FAILURE",
+  "target": {
+    "targetId": "att_91bc02",
+    "targetType": "TARGET_TYPE_ATTEMPT",
+    "status": "STATUS_FAILED"
+  },
+  "context": {
+    "runId": "run_7f3d9c21",
+    "repo": "acme/api",
+    "ref": "refs/heads/main",
+    "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+    "trigger": "push",
+    "runStatus": "STATUS_FAILED",
+    "workflowId": "wf_2b8e11",
+    "workflowName": "CI",
+    "workflowPath": ".github/workflows/ci.yml",
+    "jobId": "job_4d0a77",
+    "jobKey": "test (18)",
+    "jobDisplayName": "test (node 18)",
+    "jobStatus": "STATUS_FINISHED",
+    "jobConclusion": "CONCLUSION_FAILED",
+    "attemptId": "att_91bc02",
+    "attempt": 1,
+    "attemptStatus": "STATUS_FINISHED",
+    "truncatedContextFields": []
+  },
+  "bounds": {
+    "totalFailureGroupCount": 1,
+    "omittedFailureGroupCount": 0,
+    "omittedAttemptCount": 0,
+    "skippedDependentCount": 0,
+    "relevantLineLimit": 20,
+    "truncated": false
+  },
+  "failureGroups": [],
+  "representativeAttempts": [
+    {
+      "runId": "run_7f3d9c21",
+      "workflowId": "wf_2b8e11",
+      "jobId": "job_4d0a77",
+      "jobKey": "test (18)",
+      "attemptId": "att_91bc02",
+      "attempt": 1,
+      "attemptStatus": "STATUS_FINISHED",
+      "attemptConclusion": "CONCLUSION_FAILED",
+      "errorMessage": "Process completed with exit code 137.",
+      "diagnosis": "The test process was killed by the kernel out-of-memory killer; exit code 137 is SIGKILL.",
+      "possibleFix": "Raise the runner size for this job, or lower Jest's worker count with --maxWorkers=2.",
+      "relevantLines": [
+        {
+          "stepId": "run-tests",
+          "lineNumber": 890,
+          "content": "<--- Last few GCs --->",
+          "contentTruncated": false
+        },
+        {
+          "stepId": "run-tests",
+          "lineNumber": 902,
+          "content": "FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory",
+          "contentTruncated": false
+        },
+        {
+          "stepId": "run-tests",
+          "lineNumber": 903,
+          "content": "Process completed with exit code 137.",
+          "contentTruncated": true,
+          "contentOriginalLength": 2100
+        }
+      ],
+      "nextCommands": [
+        {
+          "kind": "NEXT_COMMAND_KIND_LOGS",
+          "targetId": "att_91bc02",
+          "label": "View logs",
+          "argv": ["depot", "ci", "logs", "att_91bc02"]
+        }
+      ]
+    }
+  ],
+  "nextCommands": [
+    {
+      "kind": "NEXT_COMMAND_KIND_LOGS",
+      "targetId": "att_91bc02",
+      "label": "View full logs for this attempt",
+      "argv": ["depot", "ci", "logs", "att_91bc02"]
+    }
+  ],
+  "overLimitBreakdown": []
+}

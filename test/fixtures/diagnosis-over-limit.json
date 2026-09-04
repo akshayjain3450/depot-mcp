@@ -1,0 +1,63 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "STATE_OVER_LIMIT",
+  "target": {
+    "targetId": "run_bigmatrix",
+    "targetType": "TARGET_TYPE_RUN",
+    "status": "STATUS_FAILED"
+  },
+  "context": {
+    "runId": "run_bigmatrix",
+    "repo": "acme/monorepo",
+    "ref": "refs/heads/main",
+    "sha": "abcdef0123456789abcdef0123456789abcdef01",
+    "trigger": "push",
+    "runStatus": "STATUS_FAILED",
+    "truncatedContextFields": []
+  },
+  "bounds": {
+    "failedProblemCandidateCount": 64,
+    "failedProblemCandidateCap": 25,
+    "totalProblemJobCount": 64,
+    "skippedDependentCount": 12,
+    "totalFailureGroupCount": 0,
+    "omittedFailureGroupCount": 0,
+    "omittedAttemptCount": 0,
+    "truncated": true
+  },
+  "failureGroups": [],
+  "representativeAttempts": [],
+  "nextCommands": [],
+  "overLimitBreakdown": [
+    {
+      "targetType": "TARGET_TYPE_WORKFLOW",
+      "targetId": "wf_unit_tests",
+      "label": "unit tests",
+      "status": "STATUS_FAILED",
+      "failedProblemCandidateCount": 41,
+      "nextCommands": [
+        {
+          "kind": "NEXT_COMMAND_KIND_DIAGNOSE_WORKFLOW",
+          "targetId": "wf_unit_tests",
+          "label": "Diagnose workflow unit tests",
+          "argv": ["depot", "ci", "diagnose", "--workflow", "wf_unit_tests"]
+        }
+      ]
+    },
+    {
+      "targetType": "TARGET_TYPE_WORKFLOW",
+      "targetId": "wf_integration",
+      "label": "integration",
+      "status": "STATUS_FAILED",
+      "failedProblemCandidateCount": 23,
+      "nextCommands": [
+        {
+          "kind": "NEXT_COMMAND_KIND_DIAGNOSE_WORKFLOW",
+          "targetId": "wf_integration",
+          "label": "Diagnose workflow integration",
+          "argv": ["depot", "ci", "diagnose", "--workflow", "wf_integration"]
+        }
+      ]
+    }
+  ]
+}

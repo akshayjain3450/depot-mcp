@@ -1,0 +1,11 @@
+{
+  "runId": "run_7f3d9c21",
+  "repo": "acme/api",
+  "ref": "refs/heads/main",
+  "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+  "trigger": "push",
+  "status": "STATUS_FAILED",
+  "createdAt": "2026-09-03T14:02:11Z",
+  "startedAt": "2026-09-03T14:02:19Z",
+  "finishedAt": "2026-09-03T14:09:47Z"
+}

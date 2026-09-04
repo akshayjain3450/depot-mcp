@@ -1,0 +1,42 @@
+{
+  "periodStart": "2026-08-05T00:00:00Z",
+  "periodEnd": "2026-09-04T00:00:00Z",
+  "containerBuild": [
+    { "projectName": "api", "buildCount": 412, "minutesSaved": 3820, "minutesBilled": 640 },
+    { "projectName": "web", "buildCount": 188, "minutesSaved": 210, "minutesBilled": 1490 }
+  ],
+  "githubActionsJobs": [
+    {
+      "repo": "acme/api",
+      "total": 5210,
+      "jobs": [
+        {
+          "workflow": "ci.yml",
+          "runner": "depot-ubuntu-24.04-8",
+          "jobCount": 1204,
+          "minutesElapsed": 4100,
+          "minutesBilled": 4180
+        },
+        {
+          "workflow": "release.yml",
+          "runner": "depot-ubuntu-24.04-16",
+          "jobCount": 66,
+          "minutesElapsed": 980,
+          "minutesBilled": 1030
+        }
+      ]
+    }
+  ],
+  "storage": [
+    { "storageType": "layer_cache", "totalGb": 288 },
+    { "storageType": "registry", "totalGb": 74 }
+  ],
+  "agentSandbox": [
+    {
+      "agentType": "AGENT_TYPE_CLAUDE_CODE",
+      "sandboxesCount": 37,
+      "minutesElapsed": 920,
+      "minutesBilled": 940
+    }
+  ]
+}

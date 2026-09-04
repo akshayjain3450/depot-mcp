@@ -1,0 +1,32 @@
+{
+  "lines": [
+    {
+      "stepKey": "run-tests",
+      "timestampMs": "1788444160000",
+      "lineNumber": 4,
+      "stream": "STREAM_STDOUT",
+      "body": "FAIL tests/api/health.test.ts > health endpoint > returns 200"
+    },
+    {
+      "stepKey": "run-tests",
+      "timestampMs": "1788444160500",
+      "lineNumber": 5,
+      "stream": "STREAM_STDERR",
+      "body": "AssertionError: expected 200 to equal 503"
+    },
+    {
+      "stepKey": "run-tests",
+      "timestampMs": "1788444161000",
+      "lineNumber": 6,
+      "stream": "STREAM_STDERR",
+      "body": "    at tests/api/health.test.ts:42:18"
+    },
+    {
+      "stepKey": "run-tests",
+      "timestampMs": "1788444162000",
+      "lineNumber": 7,
+      "stream": "STREAM_STDOUT",
+      "body": "Tests  1 failed | 128 passed (129)"
+    }
+  ]
+}

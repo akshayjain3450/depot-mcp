@@ -1,0 +1,53 @@
+{
+  "variables": [
+    {
+      "name": "NODE_ENV",
+      "description": "Runtime environment",
+      "variants": [
+        {
+          "variantName": "default",
+          "value": "production",
+          "lastModified": "2026-06-01T12:00:00Z",
+          "attributes": { "repository": "acme/api" }
+        },
+        {
+          "variantName": "preview",
+          "value": "staging",
+          "lastModified": "2026-07-14T09:22:00Z",
+          "attributes": { "repository": "acme/api", "environment": "preview" }
+        }
+      ]
+    },
+    {
+      "name": "SENTRY_AUTH_TOKEN",
+      "variants": [
+        {
+          "variantName": "default",
+          "value": "sntrys_9f8e7d6c5b4a39281706f5e4d3c2b1a0",
+          "lastModified": "2026-08-02T18:05:00Z",
+          "attributes": {}
+        }
+      ]
+    },
+    {
+      "name": "DEPLOY_BUCKET",
+      "variants": [
+        {
+          "variantName": "main",
+          "value": "acme-artifacts-prod",
+          "attributes": { "repository": "acme/api", "branch": "main" }
+        }
+      ]
+    },
+    {
+      "name": "GH_APP_CREDENTIALS",
+      "variants": [
+        {
+          "variantName": "default",
+          "value": "ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8",
+          "attributes": {}
+        }
+      ]
+    }
+  ]
+}

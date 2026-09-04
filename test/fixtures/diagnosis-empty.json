@@ -1,0 +1,26 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "STATE_EMPTY",
+  "emptyReason": "EMPTY_REASON_NO_FAILURE_EVIDENCE",
+  "target": {
+    "targetId": "run_0000aaaa",
+    "targetType": "TARGET_TYPE_RUN",
+    "status": "STATUS_FINISHED"
+  },
+  "context": {
+    "runId": "run_0000aaaa",
+    "repo": "acme/api",
+    "ref": "refs/heads/main",
+    "sha": "1111222233334444555566667777888899990000",
+    "trigger": "push",
+    "runStatus": "STATUS_FINISHED",
+    "truncatedContextFields": []
+  },
+  "bounds": {
+    "truncated": false
+  },
+  "failureGroups": [],
+  "representativeAttempts": [],
+  "nextCommands": [],
+  "overLimitBreakdown": []
+}

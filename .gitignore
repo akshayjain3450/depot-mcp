@@ -1,0 +1,34 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+*.tsbuildinfo
+
+# secrets — DEPOT_TOKEN must never be committed
+.env
+.env.*
+!.env.example
+*.pem
+depot.yaml
+
+# test / tooling output
+coverage/
+.vitest/
+.eslintcache
+npm-debug.log*
+yarn-error.log*
+*.log
+
+# editor cruft
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+
+# OS cruft
+.DS_Store
+Thumbs.db

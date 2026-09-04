@@ -1,0 +1,3 @@
+{
+  "markdown": "## Test results\n\n| suite | passed | failed |\n| --- | --- | --- |\n| unit | 128 | 1 |\n| integration | 44 | 0 |\n\nFailing test: `tests/api/health.test.ts > health endpoint > returns 200`\n"
+}
