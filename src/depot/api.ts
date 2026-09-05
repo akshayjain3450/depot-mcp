@@ -43,6 +43,26 @@ export interface ListArtifactsRequest {
 
 export type DiagnosisTargetType = 'RUN' | 'WORKFLOW' | 'JOB' | 'ATTEMPT';
 
+/**
+ * Verified live on 2026-09-06: GetFailureDiagnosis accepts `targetType` only as the protobuf enum
+ * number. Every symbolic spelling (`RUN`, `TARGET_TYPE_RUN`, `run`, snake_case field name) is
+ * answered with 400 "target_type is required"; 5 gives "Unsupported target_type: 5".
+ */
+export const DIAGNOSIS_TARGET_TYPE_WIRE: Readonly<Record<DiagnosisTargetType, number>> = {
+  RUN: 1,
+  WORKFLOW: 2,
+  JOB: 3,
+  ATTEMPT: 4,
+};
+
+/** The same table read backwards, for responses that echo the target as a number. */
+export const DIAGNOSIS_TARGET_TYPE_NAMES: Readonly<Record<number, string>> = {
+  1: 'run',
+  2: 'workflow',
+  3: 'job',
+  4: 'attempt',
+};
+
 export interface BuildStepsRequest {
   projectId: string;
   buildId: string;
@@ -170,7 +190,10 @@ export class DepotApi {
   }
 
   getFailureDiagnosis(targetId: string, targetType: DiagnosisTargetType): Promise<JsonObject> {
-    return this.client.call(rpc(CI, 'GetFailureDiagnosis'), { targetId, targetType });
+    return this.client.call(rpc(CI, 'GetFailureDiagnosis'), {
+      targetId,
+      targetType: DIAGNOSIS_TARGET_TYPE_WIRE[targetType],
+    });
   }
 
   /**

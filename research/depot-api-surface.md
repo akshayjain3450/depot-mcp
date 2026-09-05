@@ -216,7 +216,7 @@ The CLI's streaming client (`CIStreamJobAttemptLogLines`) is a useful reference 
 
 `POST /depot.ci.v1.CIService/GetFailureDiagnosis`
 
-Request: `{targetId, targetType}` where `targetType` ∈ `RUN | WORKFLOW | JOB | ATTEMPT`.
+Request: `{targetId, targetType}` where `targetType` is the enum **number**: `1` RUN, `2` WORKFLOW, `3` JOB, `4` ATTEMPT. Verified live 2026-09-06: every symbolic spelling (`RUN`, `TARGET_TYPE_RUN`, `run`) is rejected with 400 "target_type is required", and `5` gives "Unsupported target_type: 5". Depot's JSON codec here does not accept enum names, unlike `ListRuns.status`, which accepts only the lowercase strings `queued|running|finished|failed|cancelled`.
 
 This is a **server-side, bounded, AI-assisted failure analysis**. It is not a log dump. The response shape (reconstructed precisely from `pkg/cmd/ci/diagnose.go`, which serialises every field for `--output json`):
 

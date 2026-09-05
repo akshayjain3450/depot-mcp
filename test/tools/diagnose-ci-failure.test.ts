@@ -96,7 +96,7 @@ describe('depot_diagnose_ci_failure — grouped_failures', () => {
 
     const calls = harness.callsTo(RPC.getFailureDiagnosis);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.body).toEqual({ targetId: 'run_7f3d9c21', targetType: 'RUN' });
+    expect(calls[0]?.body).toEqual({ targetId: 'run_7f3d9c21', targetType: 1 });
   });
 
   it("translates Depot's nextCommands into this server's own tool calls", async () => {
@@ -186,7 +186,7 @@ describe('depot_diagnose_ci_failure — other states', () => {
 
     expect(result.structured.state).toBe('focused_failure');
     expect(result.structured.resolvedTargetType).toBe('attempt');
-    expect(harness.callsTo(RPC.getFailureDiagnosis)[0]?.body.targetType).toBe('ATTEMPT');
+    expect(harness.callsTo(RPC.getFailureDiagnosis)[0]?.body.targetType).toBe(4);
     expect(attempts).toHaveLength(1);
     expect(attempts[0]?.diagnosis).toContain('out-of-memory');
     expect(result.text).toContain('exit code 137');
@@ -245,7 +245,7 @@ describe('depot_diagnose_ci_failure — identifier resolution', () => {
     const result = await callTool(harness, 'depot_diagnose_ci_failure', { id: '01JQ9Z8ABCDEF' });
 
     const attempted = harness.callsTo(RPC.getFailureDiagnosis).map((call) => call.body.targetType);
-    expect(attempted).toEqual(['RUN', 'WORKFLOW', 'JOB', 'ATTEMPT']);
+    expect(attempted).toEqual([1, 2, 3, 4]);
     expect(result.structured.resolvedTargetType).toBe('attempt');
   });
 
@@ -290,7 +290,7 @@ describe('depot_diagnose_ci_failure — identifier resolution', () => {
 
     const calls = harness.callsTo(RPC.getFailureDiagnosis);
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.body.targetType).toBe('JOB');
+    expect(calls[0]?.body.targetType).toBe(3);
   });
 
   it('returns an actionable error when nothing matches the id', async () => {
