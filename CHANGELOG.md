@@ -40,6 +40,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `depot_whoami` reports the token kind. An Organization token cannot call `ListOrganizations` (Depot answers `401 Invalid token`), so that call is no longer treated as the authentication check; the organization id comes from the visible projects instead. A user token is recognised by the opposite pattern and the affected tools are named. Both verified live on 2026-09-06.
+
 - `depot_get_ci_logs` dropped lines when paging forward (lines past `tailLines` in the last fetched page were unreachable, and over-budget forward windows were trimmed from the start).
 - The text budget could leave holes in a summary: an oversized line was dropped while later lines were still appended. The overflowing line is now truncated and nothing follows it.
 - Probe misses while resolving a job or attempt id counted against the log page cap.

@@ -79,6 +79,39 @@ describe('depot_whoami', () => {
     expect(harness.callsTo(RPC.listOrganizations)[0]?.headers['x-depot-org']).toBe('org_9z8y7x');
   });
 
+  it('recognises an Organization token: organizations 401, projects fine', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: connectError(401, 'unauthenticated', 'Invalid token'),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    const failures = Array.isArray(result.structured.failures) ? result.structured.failures : [];
+
+    expect(result.isError).toBe(false);
+    expect(result.structured.tokenKind).toBe('organization');
+    expect(failures).toHaveLength(0);
+    expect(result.structured.activeOrgId).toBe('org_1a2b3c');
+    expect(result.text).toContain('Kind: Organization token');
+    expect(result.text).not.toContain('Checks that failed');
+    expect(result.text).not.toContain('typical of a project token');
+  });
+
+  it('asks for a project when an Organization token sees none', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: connectError(401, 'unauthenticated', 'Invalid token'),
+        [RPC.listProjects]: ok({ projects: [] }),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    expect(result.structured.tokenKind).toBe('organization');
+    expect(result.text).toContain('sees no projects yet');
+  });
+
   it('explains a user token when organizations list but projects answer 401', async () => {
     harness = await createHarness({
       routes: {
@@ -91,6 +124,7 @@ describe('depot_whoami', () => {
     const warnings = Array.isArray(result.structured.warnings) ? result.structured.warnings : [];
 
     expect(result.isError).toBe(false);
+    expect(result.structured.tokenKind).toBe('user');
     expect(warnings.some((w) => String(w).includes('user token'))).toBe(true);
     expect(result.text).toContain('Organization Settings -> API Tokens');
     expect(result.text).toContain('CI tools keep working');
