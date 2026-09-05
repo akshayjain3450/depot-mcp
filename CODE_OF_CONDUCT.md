@@ -27,7 +27,7 @@ Behaviour that is not acceptable:
 
 Maintainers are responsible for clarifying and enforcing these standards and may remove, edit, or reject comments, commits, code, issues, and other contributions that do not align with this Code of Conduct.
 
-Report unacceptable behaviour to akshayjain.devdeveloper@gmail.com. All complaints will be reviewed and investigated promptly and fairly, and the privacy of the reporter will be respected.
+Report unacceptable behaviour to akshayjain.developer@gmail.com. All complaints will be reviewed and investigated promptly and fairly, and the privacy of the reporter will be respected.
 
 Consequences follow the Contributor Covenant's enforcement guidelines: correction, warning, temporary ban, permanent ban, in proportion to the violation.
 

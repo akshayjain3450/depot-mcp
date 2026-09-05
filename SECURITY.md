@@ -4,7 +4,7 @@
 
 Do not open a public issue for a security problem.
 
-Report it privately through GitHub's "Report a vulnerability" form on this repository's Security tab (https://github.com/akshayjain3450/depot-mcp/security/advisories/new), or by email to akshayjain.devdeveloper@gmail.com. Include the version or commit, the client you used, and steps to reproduce. You will get an acknowledgement within 5 working days and a fix or a clear answer within 30 days for anything confirmed.
+Report it privately through GitHub's "Report a vulnerability" form on this repository's Security tab (https://github.com/akshayjain3450/depot-mcp/security/advisories/new), or by email to akshayjain.developer@gmail.com. Include the version or commit, the client you used, and steps to reproduce. You will get an acknowledgement within 5 working days and a fix or a clear answer within 30 days for anything confirmed.
 
 This is a community project maintained in spare time. There is no bug bounty.
 
