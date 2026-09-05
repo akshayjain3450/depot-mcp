@@ -61,7 +61,7 @@ As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise
 
 - **Read-only.** v1 registers no tool that can change anything. There is no retry, cancel, rerun, dispatch, delete, or token-minting tool.
 - **Depot CI is beta**, per Depot's own documentation. The CI tools are the most valuable ones here and also the most likely to shift under you.
-- **Publishing to npm is pending.** The `npx depot-mcp` forms below will work once 0.1.0 is published; until then use the [from a clone](#from-a-clone) path. The name `depot-mcp` is unclaimed on npm and PyPI as of 2026-09-05.
+- **Verified against a real Depot organization on 2026-09-06.** Every tool was run live with both token kinds, and `depot_diagnose_build` against a real failed build. The one tool not yet exercised against real data is `depot_diagnose_ci_failure`, because the test organization had no Depot CI runs; its request shape was verified against Depot (an unknown id returns Depot's own `not_found`), and its response parsing is covered by fixtures taken from Depot's CLI documentation.
 - **MCP protocol revision `2025-11-25`.** This server is built on the `@modelcontextprotocol/sdk` 1.x line, which speaks `2025-11-25`. The current spec revision is `2026-07-28`, implemented by the v2 packages (`@modelcontextprotocol/server` 2.0.0, published 2026-07-28), which also serve `2025-11-25` clients. Every current client negotiates `2025-11-25`, so nothing is lost today. Moving to v2 is a planned, contained change: the SDK is imported in nine files and the transport wiring lives in `src/index.ts`.
 
 ## Prerequisites

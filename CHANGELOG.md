@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.0] - 2026-09-06
+
+First release.
+
 ### Added
 
 - `docs/tokens.md`: which Depot token kind can call which tool and which Depot service, verified live.
@@ -61,10 +67,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Tokens containing line breaks or spaces no longer leak through the HTTP client's "invalid header value" error; transport and Connect error messages are scrubbed of the token.
 - Untrusted CI content (logs, summaries, Depot's AI diagnosis and suggested fix) is fenced and labelled in tool summaries, and the server instructions tell the model to treat it as data.
 - Credential redaction rewritten: unanchored vendor patterns (GitHub, GitLab, AWS, Google, Slack, Stripe, OpenAI, Anthropic, npm, PyPI, Docker Hub, Vault, Depot, JWT, Bearer/Basic, PEM), structural rules (`user:pass@` URLs, `password=`-style fragments), a length rule, and a windowed entropy rule that no longer over-redacts URLs, paths, image references, semver strings, or git SHAs. Name matching is segment-based, so `AUTHOR_NAME` and `CERT_PATH` are no longer redacted while `DB_PASS` and `SLACK_WEBHOOK` are.
-
-## [0.1.0] - Unreleased
-
-Initial release. Everything above.
 
 [Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/akshayjain3450/depot-mcp/releases/tag/v0.1.0
