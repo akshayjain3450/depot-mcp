@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `docs/tokens.md`: which Depot token kind can call which tool and which Depot service, verified live.
+
 - Read-only MCP server for Depot (depot.dev) over stdio, built on `@modelcontextprotocol/sdk` 1.x, protocol revision `2025-11-25`.
 - 16 read-only tools, all annotated `readOnlyHint: true` and `destructiveHint: false`:
   - CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts`, `depot_list_ci_secrets`, `depot_list_ci_variables`.

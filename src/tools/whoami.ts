@@ -13,7 +13,7 @@ const PROJECT_PREVIEW_LIMIT = 25;
  * does not say so, and the generic 401 guidance ("check the token") sends people the wrong way.
  */
 export const USER_TOKEN_WARNING =
-  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). Being an organization owner does not change this. The CI tools, depot_list_images and depot_list_ci_secrets/variables keep working.';
+  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). Being an organization owner does not change this. The CI tools, depot_list_images and depot_list_ci_secrets/variables keep working. Full matrix: https://github.com/akshayjain3450/depot-mcp/blob/main/docs/tokens.md';
 
 /**
  * The mirror image, also observed live on 2026-09-06: an Organization token reaches every core and
@@ -22,7 +22,7 @@ export const USER_TOKEN_WARNING =
  * pair of results is.
  */
 export const ORGANIZATION_TOKEN_NOTE =
-  'Organization token: Depot does not let it list organizations (that RPC answers "Invalid token" for every Organization token, which is expected), so the organization id is taken from the projects it can see.';
+  'Organization token: Depot does not let it list organizations (that RPC answers "Invalid token" for every Organization token, which is expected), so the organization id is taken from the projects it can see. Full matrix: https://github.com/akshayjain3450/depot-mcp/blob/main/docs/tokens.md';
 
 export type TokenKind = 'organization' | 'user' | 'unknown';
 
