@@ -58,6 +58,40 @@ export function rpcLabel(target: RpcTarget): string {
   return `${target.service}/${target.method}`;
 }
 
+/**
+ * Upper bound on how much of a server-supplied message is kept. A Connect envelope normally
+ * carries one sentence; anything longer is a stack trace or an HTML page and only wastes the
+ * model's context.
+ */
+export const MAX_SERVER_MESSAGE_CHARS = 500;
+
+function capServerMessage(message: string | undefined): string | undefined {
+  if (message === undefined || message.length <= MAX_SERVER_MESSAGE_CHARS) {
+    return message;
+  }
+  return `${message.slice(0, MAX_SERVER_MESSAGE_CHARS)} [truncated]`;
+}
+
+/**
+ * Removes credentials from text that came out of the HTTP layer. Node's fetch echoes a rejected
+ * header value back in its error message, so an "invalid header value" failure would otherwise
+ * carry the whole bearer token into a tool result.
+ */
+export function scrubSecrets(text: string, secrets: readonly string[] = []): string {
+  let scrubbed = text;
+  // Exact values first: once the Bearer pattern has eaten the first half of a token that
+  // contains whitespace, the whole-token match below would no longer find the rest.
+  for (const secret of secrets) {
+    const fragments = [secret, ...secret.split(/\s+/).filter((part) => part.length >= 8)];
+    for (const fragment of fragments) {
+      if (fragment !== '') {
+        scrubbed = scrubbed.split(fragment).join('[redacted]');
+      }
+    }
+  }
+  return scrubbed.replace(/Bearer\s+\S+/g, 'Bearer [redacted]');
+}
+
 /** An error Depot returned as a Connect error envelope, or one synthesised from an HTTP status. */
 export class DepotApiError extends Error {
   readonly code: ConnectErrorCode;
@@ -65,35 +99,57 @@ export class DepotApiError extends Error {
   readonly rpc: string;
   readonly serverMessage: string | undefined;
   readonly retryable: boolean;
+  /** Parsed from a `Retry-After` response header, when Depot sent one. */
+  readonly retryAfterMs: number | undefined;
 
   constructor(options: {
     code: ConnectErrorCode;
     httpStatus: number;
     rpc: string;
     serverMessage?: string | undefined;
+    retryAfterMs?: number | undefined;
+    /** Overrides the code-derived default, for failures that retrying cannot fix. */
+    retryable?: boolean | undefined;
   }) {
-    const detail = options.serverMessage ?? `HTTP ${options.httpStatus}`;
+    const serverMessage = capServerMessage(options.serverMessage);
+    const detail = serverMessage ?? `HTTP ${options.httpStatus}`;
     super(`Depot ${options.rpc} failed with ${options.code}: ${detail}`);
     this.name = 'DepotApiError';
     this.code = options.code;
     this.httpStatus = options.httpStatus;
     this.rpc = options.rpc;
-    this.serverMessage = options.serverMessage;
-    this.retryable = RETRYABLE_CODES.has(options.code);
+    this.serverMessage = serverMessage;
+    this.retryable = options.retryable ?? RETRYABLE_CODES.has(options.code);
+    this.retryAfterMs = options.retryAfterMs;
   }
+}
+
+function isTimeoutCause(cause: unknown): boolean {
+  if (typeof cause !== 'object' || cause === null || !('name' in cause)) {
+    return false;
+  }
+  return cause.name === 'TimeoutError' || cause.name === 'AbortError';
 }
 
 /** A request that never produced an HTTP response: DNS failure, TLS failure, timeout, offline. */
 export class DepotTransportError extends Error {
   readonly rpc: string;
   readonly retryable = true;
+  /** True when the request was cut short by the per-request timeout rather than by the network. */
+  readonly timedOut: boolean;
 
-  constructor(rpc: string, cause: unknown) {
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    super(`Could not reach the Depot API for ${rpc}: ${reason}`);
+  /**
+   * @param secrets Values that must never appear in the message; the token, at minimum. Only the
+   *   message is scrubbed: `cause` keeps the original error for stderr diagnostics and must not
+   *   be forwarded to the client.
+   */
+  constructor(rpc: string, cause: unknown, secrets: readonly string[] = []) {
+    const raw = cause instanceof Error ? cause.message : String(cause);
+    super(`Could not reach the Depot API for ${rpc}: ${scrubSecrets(raw, secrets)}`);
     this.name = 'DepotTransportError';
     this.rpc = rpc;
     this.cause = cause;
+    this.timedOut = isTimeoutCause(cause);
   }
 }
 
@@ -103,10 +159,34 @@ export function isDepotRequestError(value: unknown): value is DepotRequestError 
   return value instanceof DepotApiError || value instanceof DepotTransportError;
 }
 
+/**
+ * `Retry-After` is either a delay in seconds or an HTTP-date. Returns milliseconds, or
+ * undefined when the header is absent or unparseable.
+ */
+export function parseRetryAfter(
+  header: string | null | undefined,
+  now: number = Date.now(),
+): number | undefined {
+  const value = header?.trim();
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  if (/^\d+$/.test(value)) {
+    return Number(value) * 1000;
+  }
+  const date = Date.parse(value);
+  if (Number.isNaN(date)) {
+    return undefined;
+  }
+  return Math.max(0, date - now);
+}
+
 export function parseConnectError(
   target: RpcTarget,
   httpStatus: number,
   rawBody: string,
+  retryAfterMs?: number,
+  secrets: readonly string[] = [],
 ): DepotApiError {
   const rpc = rpcLabel(target);
   const fallbackCode = HTTP_STATUS_TO_CODE[httpStatus] ?? 'unknown';
@@ -117,7 +197,9 @@ export function parseConnectError(
   } catch {
     // A non-JSON body means we did not reach a Connect handler at all — usually a wrong
     // DEPOT_API_URL landing on an HTML error page. Surface a snippet, not the whole page.
-    const snippet = rawBody.trim().slice(0, 200);
+    // Scrub before slicing: a proxy that echoes request headers would otherwise hand the
+    // bearer token straight back to the model.
+    const snippet = scrubSecrets(rawBody.trim().slice(0, 400), secrets).slice(0, 200);
     return new DepotApiError({
       code: fallbackCode,
       httpStatus,
@@ -126,6 +208,7 @@ export function parseConnectError(
         snippet === ''
           ? undefined
           : `non-JSON response from the API (is DEPOT_API_URL correct?): ${snippet}`,
+      retryAfterMs,
     });
   }
 
@@ -138,8 +221,15 @@ export function parseConnectError(
     code,
     httpStatus,
     rpc,
-    serverMessage: readString(envelope, 'message'),
+    serverMessage: mapDefined(readString(envelope, 'message'), (message) =>
+      scrubSecrets(message, secrets),
+    ),
+    retryAfterMs,
   });
+}
+
+function mapDefined<T, U>(value: T | undefined, fn: (value: T) => U): U | undefined {
+  return value === undefined ? undefined : fn(value);
 }
 
 const CODE_GUIDANCE: Readonly<Record<ConnectErrorCode, string>> = {

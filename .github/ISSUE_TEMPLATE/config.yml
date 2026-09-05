@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/akshayjain3450/depot-mcp/blob/main/SECURITY.md
+    about: Do not open a public issue for a vulnerability. See SECURITY.md for how to report it privately.
+  - name: Depot product questions
+    url: https://depot.dev/docs
+    about: This is a community project. Questions about Depot itself belong with Depot, not here.

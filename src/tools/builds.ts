@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { readObjectArray, readString } from '../depot/shape.js';
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep, type BuildStep } from '../lib/build.js';
-import { keepTailWithinBudget, TextBudget } from '../lib/budget.js';
+import { keepTailWithinBudget, MAX_LOG_LINE_CHARS, TextBudget, truncateText } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { formatDuration } from '../lib/time.js';
 import { defineTool, ToolInputError, type ToolContext } from '../lib/tool.js';
@@ -84,18 +84,36 @@ async function collectSteps(context: ToolContext, projectId: string, buildId: st
   return steps;
 }
 
+interface StepLogs {
+  readonly lines: string[];
+  /** Lines fell out of the ring buffer because the step logged more than tailLines. */
+  readonly truncated: boolean;
+  /** DEPOT_MCP_MAX_LOG_PAGES stopped the walk, so `lines` end where reading stopped, not at the end. */
+  readonly pageCapHit: boolean;
+  readonly nextPageToken: string | undefined;
+  readonly pagesFetched: number;
+  readonly bodiesTruncated: number;
+}
+
+/**
+ * `GetBuildStepLogs` pages oldest-first, so the tail is a ring buffer over a bounded walk. When
+ * the page cap stops the walk the buffer holds the end of the last page read, not the end of the
+ * log, and the caller must say so.
+ */
 async function collectStepLogs(
   context: ToolContext,
   projectId: string,
   buildId: string,
   digest: string,
   tailLines: number,
-): Promise<{ lines: string[]; truncated: boolean }> {
+): Promise<StepLogs> {
   const buffer: string[] = [];
   let pageToken: string | undefined;
   let truncated = false;
+  let bodiesTruncated = 0;
+  let pagesFetched = 0;
 
-  for (let page = 0; page < context.config.maxLogPages; page += 1) {
+  for (;;) {
     const response = await context.api.getBuildStepLogs({
       projectId,
       buildId,
@@ -103,21 +121,28 @@ async function collectStepLogs(
       pageSize: 500,
       pageToken,
     });
+    pagesFetched += 1;
     for (const entry of readObjectArray(response, 'logs')) {
-      const message = readString(entry, 'message') ?? '';
-      buffer.push(message);
+      const message = truncateText(readString(entry, 'message') ?? '', MAX_LOG_LINE_CHARS);
+      if (message.truncated) {
+        bodiesTruncated += 1;
+      }
+      buffer.push(message.text);
       if (buffer.length > tailLines) {
         buffer.shift();
         truncated = true;
       }
     }
     const next = readString(response, 'nextPageToken');
+    const base = { lines: buffer, truncated, pagesFetched, bodiesTruncated };
     if (next === undefined || next === pageToken) {
-      return { lines: buffer, truncated };
+      return { ...base, pageCapHit: false, nextPageToken: undefined };
+    }
+    if (pagesFetched >= context.config.maxLogPages) {
+      return { ...base, pageCapHit: true, nextPageToken: next };
     }
     pageToken = next;
   }
-  return { lines: buffer, truncated: true };
 }
 
 export const diagnoseBuildTool = defineTool({
@@ -156,12 +181,16 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
         digest: z.string().optional(),
         cacheState: z.string().optional(),
         error: z.string().optional(),
+        errorTruncated: z.boolean().optional(),
         durationSeconds: z.number().optional(),
         selectedBecause: z.string(),
       })
       .optional(),
     logTail: z.array(z.string()),
     logTruncated: z.boolean(),
+    logPageCapHit: z.boolean(),
+    logNextPageToken: z.string().optional(),
+    logLinesTruncated: z.number(),
     cacheSummary: z.object({
       cachedSteps: z.number().optional(),
       totalSteps: z.number().optional(),
@@ -185,6 +214,10 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
 
     let logTail: string[] = [];
     let logTruncated = false;
+    let logPageCapHit = false;
+    let logNextPageToken: string | undefined;
+    let logLinesTruncated = 0;
+    let logPagesFetched = 0;
     if (failing?.digest !== undefined && failing.hasLogs) {
       const logs = await collectStepLogs(
         context,
@@ -199,10 +232,32 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
         (line) => line.length + 1,
       );
       logTail = budgeted.kept;
-      logTruncated = logs.truncated || budgeted.dropped > 0;
+      logTruncated = logs.truncated || budgeted.dropped > 0 || logs.pageCapHit;
+      logPageCapHit = logs.pageCapHit;
+      logNextPageToken = logs.nextPageToken;
+      logLinesTruncated = logs.bodiesTruncated;
+      logPagesFetched = logs.pagesFetched;
+      if (budgeted.dropped > 0) {
+        notes.push(
+          `${budgeted.dropped} earlier log line(s) were dropped to fit the character budget; lower tailLines or raise DEPOT_MCP_OUTPUT_BUDGET.`,
+        );
+      }
+      if (logs.pageCapHit) {
+        notes.push(
+          `Stopped reading the step's logs after ${logs.pagesFetched} page(s) (DEPOT_MCP_MAX_LOG_PAGES). The lines shown end where reading stopped, not at the end of the step's output; logNextPageToken marks where to continue, and raising DEPOT_MCP_MAX_LOG_PAGES reads further.`,
+        );
+      }
+      if (logs.bodiesTruncated > 0) {
+        notes.push(
+          `${logs.bodiesTruncated} log line(s) longer than ${MAX_LOG_LINE_CHARS} characters were truncated.`,
+        );
+      }
     } else if (failing !== undefined) {
       notes.push('Depot reports no logs for this step, so only its recorded error is available.');
     }
+
+    const stepError =
+      failing?.error === undefined ? undefined : truncateText(failing.error, MAX_LOG_LINE_CHARS);
 
     const selectedBecause =
       failing === undefined
@@ -237,11 +292,17 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
         `Step to look at: ${failing.name ?? 'unnamed step'} — ${selectedBecause}.`,
         `Cache state: ${failing.cacheState ?? 'unknown'}. Duration: ${formatDuration(failing.durationSeconds)}.`,
       );
-      if (failing.error !== undefined) {
-        text.push(`Error: ${failing.error}`);
+      if (stepError !== undefined) {
+        text.push(`Error: ${stepError.text}`);
       }
       if (logTail.length > 0) {
-        text.push('', `Last ${logTail.length} log line(s) from that step:`, ...logTail);
+        text.push(
+          '',
+          logPageCapHit
+            ? `${logTail.length} log line(s) from that step, from the first ${logPagesFetched} page(s) of its output only. The log continues past what was read:`
+            : `Last ${logTail.length} log line(s) from that step:`,
+          ...logTail,
+        );
       }
     }
 
@@ -262,12 +323,16 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
                 name: failing.name,
                 digest: failing.digest,
                 cacheState: failing.cacheState,
-                error: failing.error,
+                error: stepError?.text,
+                ...(stepError?.truncated === true ? { errorTruncated: true } : {}),
                 durationSeconds: failing.durationSeconds,
                 selectedBecause,
               },
         logTail,
         logTruncated,
+        logPageCapHit,
+        logNextPageToken,
+        logLinesTruncated,
         cacheSummary: {
           cachedSteps: build.cachedSteps,
           totalSteps: build.totalSteps,

@@ -393,3 +393,46 @@ curl https://depot.dev/docs/api/overview.md
 - https://circleci.com/product/mcp/
 - https://buildkite.com/docs/apis/mcp-server
 - https://docs.docker.com/docker-hub/mcp-server/
+
+---
+
+## Addendum: re-verification on 2026-09-05
+
+A second, independent pass one day later. Verdict unchanged: **no standalone Depot (depot.dev) MCP server exists, first-party or third-party.** Confidence stays at roughly 95%. Two corrections and several new data points:
+
+### Corrections to the 2026-09-04 survey
+
+1. **One public codebase does implement MCP tools against `api.depot.dev`**, found by GitHub *code* search rather than repo-name search: `InnerScopeHearing/otchealth-mcp-server` (1 star, no license, TypeScript, Fastify + `@modelcontextprotocol/sdk`, Streamable HTTP with bearer auth). It carries 46 `depot_*` tools inside a single company's internal gateway alongside roughly 800 tools for unrelated services. It is not standalone, not packaged, not licensed, and not in any registry, so it is not usable prior art. It is still worth reading as a verified map of which Connect RPCs on `api.depot.dev` accept a bearer organization token, and for its gating pattern: each tool carries `category: read | write_simple | write_orchestrated`, env flags `READ_ONLY_MODE` / `ENABLE_WRITE_TOOLS` / `ENABLE_HIGH_RISK_TOOLS`, writes default to `dry_run=true`, and MCP annotations are set per tool.
+2. **The claim that no build-accelerator competitor ships an MCP server was wrong.** WarpBuild has a hosted remote server at `https://mcp.warpbuild.com/mcp` (docs dated 2026-01-20). Blacksmith has a third-party one, `grahamnotgrant/blacksmith-mcp` (stdio via `npx`, auth by reusing a browser session cookie). Namespace has none.
+3. The npm package `mcp-depot` **exists** (v1.0.3, 2026-07-31). It is the generic REST-to-MCP hub from `mcp-depot/mcp-depot`, unrelated to Depot. The 2026-09-04 survey listed it as 404.
+
+### Re-checked sources (all 2026-09-05)
+
+- GitHub repo search: `"depot mcp"`, `"depot-mcp"`, `"mcp-depot"` return only name collisions (Home Depot, KPI Depot, Warhammer, Steam DepotDownloader, French "dépôt"). `"depot.dev mcp"` and `"depot model context protocol"` return 0.
+- GitHub code search: `"api.depot.dev" modelcontextprotocol` returns 0. `"depot.dev" "McpServer"` returns 9, of which only the otchealth repo is real.
+- `depot` org: 92 repos, none MCP-related. `depot/cli` latest release still v2.102.7 (2026-08-24), 25 command dirs, no `mcp`. `depot/skills` had a content commit on 2026-09-02 with zero MCP references. `depot/docs` synced 2026-09-02, zero hits.
+- npm: `depot-mcp`, `@depot/mcp`, `@depot/mcp-server`, `depot-mcp-server`, `mcp-server-depot`, `depot-dev-mcp`, `@depot-dev/mcp`, `depotdev-mcp`, `depot-ci-mcp`, `mcp-depot-dev` all 404. PyPI: `depot-mcp`, `mcp-depot`, `mcp-server-depot`, `depot-mcp-server`, `depot-dev-mcp`, `depotdev-mcp` all 404.
+- Official registry: `GET /v0/servers?search=depot` returns 15 unrelated entries; `search=depot.dev` returns 0. Control query `search=buildkite` works.
+- Smithery (6 pages of `q=depot`), Glama, PulseMCP, Docker MCP catalog (824 servers in `docker/mcp-registry`), four awesome-mcp-servers lists: zero Depot entries. mcp.so (403), cursor.directory (429) and mcpservers.org (JS shell) could only be checked weakly through web search.
+- Depot's site: `llms.txt` (71,305 bytes) and `llms-all.txt` (870,565 bytes) contain zero occurrences of "mcp". Newest changelog entry is still 2026-08-26. `docs/ai-at-depot` says that agents integrating over HTTP instead of a shell should call the Depot CI API directly, which is Depot's stated answer to shell-less agents. `depot.dev/mcp`, `api.depot.dev/mcp`, `mcp.depot.dev`, `.well-known/mcp.json`, `/sse` all 404 or unresolvable.
+- Not checkable: X/Twitter and LinkedIn.
+
+### Reference servers and how they distribute
+
+| Server | Language | Transports | Distribution | Read-only / write gating |
+| --- | --- | --- | --- | --- |
+| github/github-mcp-server (MIT, v1.12.0 on 2026-09-03) | Go | stdio, streamable HTTP | hosted `api.githubcopilot.com/mcp/` (OAuth or PAT); local via Docker image or Go binary | `--read-only` flag, `--toolsets` allow-list, `--tools` fine-grained; read-only wins over explicit tools |
+| buildkite/buildkite-mcp-server (MIT, v1.22.0) | Go | stdio, HTTP | hosted `mcp.buildkite.com/mcp`, `/direct`, `/mcp/readonly`; local binary, Docker, brew | read-only endpoint exposes only tools whose scope starts with `read_` |
+| CircleCI | npm package now deprecated | hosted streamable HTTP, CLI-bundled stdio | `mcp.circleci.com/v1/mcp`, `circleci` CLI | curated small toolset, confirmation on destructive actions |
+| Railway | npm package deprecated, now in CLI | stdio (`railway mcp`), remote `mcp.railway.com` (OAuth) | CLI-bundled | none documented |
+| WarpBuild (official) | unknown | streamable HTTP only | `mcp.warpbuild.com/mcp` with dashboard API key | none documented |
+| grahamnotgrant/blacksmith-mcp (MIT) | TypeScript | stdio | `npx blacksmith-mcp` | read-only by nature (analytics) |
+| docker/hub-mcp (Apache-2.0) | TypeScript | stdio, HTTP | `npm start -- --transport=...`; HTTP fails closed without `MCP_AUTH_TOKEN` | none |
+
+The 2026 pattern across vendors is CLI-bundled stdio plus a hosted remote with OAuth, with standalone npm packages being deprecated in favour of those two. Read-only gating is done at the endpoint level (Buildkite) or by flag (GitHub).
+
+### Naming and discoverability
+
+- `depot-mcp` is free on npm and PyPI. `mcp-depot` is taken. Never use `@depot/*` (Depot's npm scope) or `dev.depot/*` in the official registry (requires DNS or HTTP domain verification only Depot can pass).
+- The bare word "depot" is polluted in every directory. The official registry matches on name plus description, so the package description should begin with "depot.dev" and keywords should include `depot.dev`, `depot-ci`, `container-builds`, `github-actions`, `mcp-server`.
+- Publish order: official MCP registry (`io.github.<owner>/depot-mcp`, needs `mcpName` in package.json and the `mcp-publisher` CLI), npm, Docker MCP catalog (PR to `docker/mcp-registry`), Smithery, then Glama and PulseMCP (which crawl the registry and GitHub), then `punkpeye/awesome-mcp-servers`. Optionally open an issue on `depot/skills` linking the project.

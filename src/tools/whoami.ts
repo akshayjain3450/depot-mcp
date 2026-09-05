@@ -83,6 +83,19 @@ Never returns the token or any part of it.`,
       }
     }
 
+    if (
+      configuredOrgId !== undefined &&
+      organizations.length > 0 &&
+      !organizations.some((org) => org.orgId === configuredOrgId)
+    ) {
+      const visible = organizations
+        .map((org) => org.orgId)
+        .filter((orgId): orgId is string => orgId !== undefined);
+      warnings.push(
+        `DEPOT_ORG_ID is set to "${configuredOrgId}", but this token cannot see that organization. Requests scoped to it will fail or return nothing. Visible organization ids: ${visible.length === 0 ? 'none reported' : visible.join(', ')}.`,
+      );
+    }
+
     if (organizations.length === 0 && failures.length === 0) {
       warnings.push(
         'The token authenticated but sees no organizations. That is typical of a project token, which cannot reach the Depot CI API or the Depot API — use an Organization token instead.',

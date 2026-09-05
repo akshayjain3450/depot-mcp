@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import { DepotApiError } from '../../src/depot/errors.js';
 import { selectFailingStep, type BuildStep } from '../../src/lib/build.js';
 import { keepHeadWithinBudget, keepTailWithinBudget, TextBudget, truncateText } from '../../src/lib/budget.js';
+import { isWrongTargetError } from '../../src/lib/ci-target.js';
+import { parseDiagnosis } from '../../src/lib/diagnosis.js';
 import { redactValue } from '../../src/lib/redact.js';
 import {
   candidateTargetTypes,
@@ -8,7 +11,13 @@ import {
   normalizeTargetType,
   toDiagnosisTargetType,
 } from '../../src/lib/resolve.js';
-import { durationSecondsBetween, formatDuration, toRfc3339 } from '../../src/lib/time.js';
+import {
+  durationSecondsBetween,
+  formatDuration,
+  isDateOnly,
+  toRfc3339,
+  toRfc3339WindowEnd,
+} from '../../src/lib/time.js';
 
 describe('truncateText', () => {
   it('leaves short text alone', () => {
@@ -151,6 +160,71 @@ describe('target type resolution', () => {
   });
 });
 
+describe('isWrongTargetError', () => {
+  const apiError = (code: DepotApiError['code']): DepotApiError =>
+    new DepotApiError({ code, httpStatus: 400, rpc: 'depot.ci.v1.CIService/GetJobSummary' });
+
+  it('treats both not_found and invalid_argument as "wrong kind of id"', () => {
+    expect(isWrongTargetError(apiError('not_found'))).toBe(true);
+    expect(isWrongTargetError(apiError('invalid_argument'))).toBe(true);
+  });
+
+  it('does not swallow other Depot errors or non-Depot errors', () => {
+    expect(isWrongTargetError(apiError('permission_denied'))).toBe(false);
+    expect(isWrongTargetError(apiError('unavailable'))).toBe(false);
+    expect(isWrongTargetError(new Error('not_found'))).toBe(false);
+    expect(isWrongTargetError(undefined)).toBe(false);
+  });
+});
+
+describe('parseDiagnosis', () => {
+  const limits = { maxFailureGroups: 5, maxEvidenceLines: 15 };
+
+  it('strips every Depot status prefix, not just STATUS_', () => {
+    const diagnosis = parseDiagnosis(
+      {
+        state: 'STATE_OVER_LIMIT',
+        target: { targetId: 'run_1', targetType: 'TARGET_TYPE_RUN', status: 'RUN_STATUS_FAILED' },
+        overLimitBreakdown: [
+          { targetType: 'TARGET_TYPE_JOB', targetId: 'job_1', status: 'JOB_STATUS_FAILED' },
+          { targetType: 'TARGET_TYPE_WORKFLOW', targetId: 'wf_1', status: 'STATUS_FAILED' },
+        ],
+      },
+      limits,
+    );
+
+    expect(diagnosis.target.status).toBe('failed');
+    expect(diagnosis.narrowerTargets.map((target) => target.status)).toEqual(['failed', 'failed']);
+  });
+
+  it('caps AI prose and labels so repository content cannot flood the output', () => {
+    const diagnosis = parseDiagnosis(
+      {
+        state: 'STATE_GROUPED_FAILURES',
+        failureGroups: [
+          {
+            diagnosis: 'd'.repeat(5_000),
+            possibleFix: 'f'.repeat(5_000),
+            representatives: [{ attemptId: 'att_1', diagnosis: 'x'.repeat(5_000) }],
+          },
+        ],
+        nextCommands: [
+          { kind: 'NEXT_COMMAND_KIND_LOGS', targetId: 'att_1', label: 'l'.repeat(1_000) },
+        ],
+        overLimitBreakdown: [{ targetId: 'wf_1', label: 'w'.repeat(1_000) }],
+      },
+      limits,
+    );
+
+    const group = diagnosis.failureGroups[0];
+    expect(group?.diagnosis?.length).toBeLessThanOrEqual(2_000);
+    expect(group?.possibleFix?.length).toBeLessThanOrEqual(2_000);
+    expect(group?.attempts[0]?.diagnosis?.length).toBeLessThanOrEqual(2_000);
+    expect(diagnosis.nextSteps[0]?.label?.length).toBeLessThanOrEqual(200);
+    expect(diagnosis.narrowerTargets[0]?.label?.length).toBeLessThanOrEqual(200);
+  });
+});
+
 describe('time helpers', () => {
   it('computes a duration between two timestamps', () => {
     expect(durationSecondsBetween('2026-09-03T14:02:19Z', '2026-09-03T14:09:47Z')).toBe(448);
@@ -170,6 +244,20 @@ describe('time helpers', () => {
   it('normalises dates and rejects unparseable ones', () => {
     expect(toRfc3339('2026-08-01')).toBe('2026-08-01T00:00:00.000Z');
     expect(() => toRfc3339('last tuesday')).toThrow(/RFC 3339/);
+  });
+
+  it('recognises a bare date', () => {
+    expect(isDateOnly('2024-01-31')).toBe(true);
+    expect(isDateOnly(' 2024-01-31 ')).toBe(true);
+    expect(isDateOnly('2024-01-31T00:00:00Z')).toBe(false);
+    expect(isDateOnly('2024-01')).toBe(false);
+  });
+
+  it('makes a date-only window end inclusive of that day', () => {
+    expect(toRfc3339WindowEnd('2024-01-31')).toBe('2024-02-01T00:00:00.000Z');
+    expect(toRfc3339WindowEnd('2024-12-31')).toBe('2025-01-01T00:00:00.000Z');
+    expect(toRfc3339WindowEnd('2024-01-31T12:30:00Z')).toBe('2024-01-31T12:30:00.000Z');
+    expect(() => toRfc3339WindowEnd('yesterday')).toThrow(/RFC 3339/);
   });
 });
 

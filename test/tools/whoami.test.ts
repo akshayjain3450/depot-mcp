@@ -126,3 +126,128 @@ describe('depot_whoami', () => {
     expect(JSON.stringify(result.structured.warnings)).toContain('project token');
   });
 });
+
+describe('depot_whoami organization ambiguity', () => {
+  it('reports every visible organization and the exact count in the warning', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations-multi')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    const organizations = Array.isArray(result.structured.organizations)
+      ? result.structured.organizations
+      : [];
+    const warnings = Array.isArray(result.structured.warnings) ? result.structured.warnings : [];
+
+    expect(organizations).toEqual([
+      { orgId: 'org_1a2b3c', name: 'Acme Engineering' },
+      { orgId: 'org_9z8y7x', name: 'Acme Labs' },
+    ]);
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0])).toContain('2 organizations');
+    expect(result.text).not.toContain('<- active');
+    expect(result.text).toContain('Warnings:');
+    expect(harness.callsTo(RPC.listOrganizations)[0]?.headers['x-depot-org']).toBeUndefined();
+  });
+
+  it('marks the configured organization active and drops the warning', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations-multi')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { orgId: 'org_1a2b3c' },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.warnings).toEqual([]);
+    expect(result.text).toContain('org_1a2b3c — Acme Engineering <- active');
+    expect(result.text).not.toContain('org_9z8y7x — Acme Labs <- active');
+    expect(harness.callsTo(RPC.listProjects)[0]?.headers['x-depot-org']).toBe('org_1a2b3c');
+  });
+
+  // DEPOT_ORG_ID is still authoritative for request scoping, but a value the token cannot see is
+  // almost always a typo, so it is cross-checked against the visible list and called out.
+  it('warns when DEPOT_ORG_ID names an organization the token cannot see', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations-multi')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { orgId: 'org_typo' },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    const warnings = Array.isArray(result.structured.warnings) ? result.structured.warnings : [];
+
+    expect(result.isError).toBe(false);
+    expect(result.structured.activeOrgId).toBe('org_typo');
+    expect(warnings).toHaveLength(1);
+    expect(String(warnings[0])).toContain('"org_typo"');
+    expect(String(warnings[0])).toContain('cannot see that organization');
+    expect(String(warnings[0])).toContain('org_1a2b3c, org_9z8y7x');
+    expect(result.text).toContain('cannot see that organization');
+    expect(result.text).not.toContain('<- active');
+  });
+
+  it('reads organizations under the alternative key and id spellings', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok({
+          orgs: [{ organizationId: 'org_a', name: 'A' }, { id: 'org_b', name: 'B' }],
+        }),
+        [RPC.listProjects]: ok({}),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.organizations).toEqual([
+      { orgId: 'org_a', name: 'A' },
+      { orgId: 'org_b', name: 'B' },
+    ]);
+    expect(result.structured.activeOrgId).toBeUndefined();
+  });
+
+  it('reports both failures without guessing about the token when every check fails', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: connectError(401, 'unauthenticated', 'bad token'),
+        [RPC.listProjects]: connectError(401, 'unauthenticated', 'bad token'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    const failures = Array.isArray(result.structured.failures) ? result.structured.failures : [];
+
+    expect(result.isError).toBe(false);
+    expect(failures).toHaveLength(2);
+    expect(result.structured.warnings).toEqual([]);
+    expect(result.structured.projectCount).toBeUndefined();
+    expect(result.structured.organizations).toEqual([]);
+    expect(result.text).toContain('Organizations visible: none.');
+    expect(result.text).toContain('DEPOT_TOKEN');
+    expect(result.text).not.toContain(TOKEN);
+  });
+
+  it('previews at most 25 projects and says how many more exist', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok({
+          projects: Array.from({ length: 30 }, (_, i) => ({ projectId: `proj_${i}`, name: `p${i}` })),
+        }),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.projectCount).toBe(30);
+    expect(Array.isArray(result.structured.projects) ? result.structured.projects : []).toHaveLength(25);
+    expect(result.text).toContain('… 5 more; see depot_list_projects.');
+  });
+});

@@ -46,7 +46,7 @@ describe('depot_get_ci_logs', () => {
     expect(result.text).toContain('Tests  1 failed | 128 passed');
   });
 
-  it('filters server-side with grep so the whole log need not be returned', async () => {
+  it('filters with grep after fetching, so every page is still read but only matches come back', async () => {
     harness = await createHarness({ routes: bothPages });
 
     const result = await callTool(harness, 'depot_get_ci_logs', {
@@ -125,7 +125,9 @@ describe('depot_get_ci_logs', () => {
 
     expect(harness.callsTo(RPC.getJobAttemptLogs)).toHaveLength(1);
     expect(result.structured.nextPageToken).toBe('cursor-page-2');
+    expect(result.structured.pageCapHit).toBe(true);
     expect(JSON.stringify(result.structured.notes)).toContain('DEPOT_MCP_MAX_LOG_PAGES');
+    expect(result.text).not.toContain('Earlier log lines were not read');
   });
 
   it('pages forward from a supplied token instead of returning the tail', async () => {

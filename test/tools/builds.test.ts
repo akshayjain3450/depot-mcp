@@ -118,6 +118,88 @@ describe('depot_diagnose_build', () => {
 
     expect(JSON.stringify(result.structured.notes)).toContain('not a failure');
   });
+
+  it('does not call the tail "last lines" when the page cap stopped the log walk', async () => {
+    harness = await createHarness({
+      routes: {
+        ...buildRoutes,
+        [RPC.getBuildStepLogs]: ok({
+          logs: [{ message: 'step 1 of many' }, { message: 'step 2 of many' }],
+          nextPageToken: 'logs-page-2',
+        }),
+      },
+      config: { maxLogPages: 1 },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_4a91c7',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(harness.callsTo(RPC.getBuildStepLogs)).toHaveLength(1);
+    expect(result.structured.logTail).toEqual(['step 1 of many', 'step 2 of many']);
+    expect(result.structured.logTruncated).toBe(true);
+    expect(result.structured.logPageCapHit).toBe(true);
+    expect(result.structured.logNextPageToken).toBe('logs-page-2');
+    expect(result.text).not.toMatch(/last \d+ log line/i);
+    expect(result.text).toMatch(/first 1 page/i);
+    expect(result.text).toMatch(/continues/i);
+    expect(JSON.stringify(result.structured.notes)).toContain('DEPOT_MCP_MAX_LOG_PAGES');
+  });
+
+  it('keeps calling a complete tail the last lines', async () => {
+    harness = await createHarness({ routes: buildRoutes });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_4a91c7',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.structured.logPageCapHit).toBe(false);
+    expect(result.structured.logNextPageToken).toBeUndefined();
+    expect(result.text).toMatch(/last 4 log line/i);
+  });
+
+  it('caps a huge log line and a huge step error so neither escapes the budget', async () => {
+    const hugeLine = 'L'.repeat(50_000);
+    const hugeError = 'E'.repeat(50_000);
+    harness = await createHarness({
+      routes: {
+        ...buildRoutes,
+        [RPC.getBuildSteps]: ok({
+          steps: [
+            {
+              name: 'RUN make',
+              digest: 'sha256:33cc',
+              cacheState: 1,
+              error: hugeError,
+              hasLogs: true,
+            },
+          ],
+        }),
+        [RPC.getBuildStepLogs]: ok({
+          logs: [{ message: 'before' }, { message: hugeLine }, { message: 'after' }],
+        }),
+      },
+      config: { outputCharBudget: 6_000 },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_4a91c7',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.text.length).toBeLessThanOrEqual(6_100);
+    expect(JSON.stringify(result.structured).length).toBeLessThan(12_000);
+    const tail = Array.isArray(result.structured.logTail) ? result.structured.logTail.map(String) : [];
+    expect(tail.map((line) => line.length <= 2_000)).toEqual([true, true, true]);
+    expect(result.structured.logLinesTruncated).toBe(1);
+    const failing = asRecord(result.structured.failingStep);
+    expect(String(failing.error).length).toBeLessThanOrEqual(2_000);
+    expect(failing.errorTruncated).toBe(true);
+  });
 });
 
 describe('depot_list_builds', () => {

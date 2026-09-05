@@ -41,6 +41,18 @@ describe('depot_list_projects', () => {
     expect(result.structured.returned).toBe(0);
     expect(result.text).toContain('depot_whoami');
   });
+
+  it('forwards pageToken and points at it when more pages exist', async () => {
+    harness = await createHarness({
+      routes: { [RPC.listProjects]: ok({ ...fixture('projects'), nextPageToken: 'page-2' }) },
+    });
+
+    const result = await callTool(harness, 'depot_list_projects', { pageToken: 'page-1' });
+
+    expect(harness.callsTo(RPC.listProjects)[0]?.body).toMatchObject({ pageToken: 'page-1' });
+    expect(result.structured.nextPageToken).toBe('page-2');
+    expect(result.text).toContain('re-call with pageToken');
+  });
 });
 
 describe('depot_get_project', () => {
@@ -124,7 +136,7 @@ describe('depot_get_usage', () => {
     expect(Math.round(span / 86_400_000)).toBe(30);
   });
 
-  it('normalises a plain date and scopes to one project', async () => {
+  it('normalises plain dates, treating a date-only endAt as inclusive, and scopes to one project', async () => {
     harness = await createHarness({
       routes: {
         [RPC.getProjectUsage]: ok({
@@ -142,28 +154,54 @@ describe('depot_get_usage', () => {
       endAt: '2026-09-01',
     });
 
+    // A bare "2026-09-01" end date means the whole of 1 September, so the wire value is the
+    // following midnight rather than the start of the day.
     expect(harness.callsTo(RPC.getProjectUsage)[0]?.body).toEqual({
       projectId: 'proj_api7f2',
       startAt: '2026-08-01T00:00:00.000Z',
-      endAt: '2026-09-01T00:00:00.000Z',
+      endAt: '2026-09-02T00:00:00.000Z',
     });
     expect(result.structured.scope).toBe('project proj_api7f2');
     expect(asRecord(result.structured.projectUsage).layerCacheSizeGb).toBe(42);
   });
 
-  it('rejects a half-specified window and an unparseable date', async () => {
+  it('passes a full endAt timestamp through unchanged', async () => {
+    harness = await createHarness({ routes: { [RPC.getUsage]: ok(fixture('usage')) } });
+
+    await callTool(harness, 'depot_get_usage', {
+      startAt: '2026-08-01T00:00:00Z',
+      endAt: '2026-09-01T12:30:00Z',
+    });
+
+    expect(harness.callsTo(RPC.getUsage)[0]?.body).toEqual({
+      startAt: '2026-08-01T00:00:00.000Z',
+      endAt: '2026-09-01T12:30:00.000Z',
+    });
+  });
+
+  it('rejects a half-specified window and an unparseable date, naming the field', async () => {
     harness = await createHarness({ routes: { [RPC.getUsage]: ok(fixture('usage')) } });
 
     const halfWindow = await callTool(harness, 'depot_get_usage', { startAt: '2026-08-01' });
     expect(halfWindow.isError).toBe(true);
     expect(halfWindow.text).toContain('both startAt and endAt');
 
-    const badDate = await callTool(harness, 'depot_get_usage', {
+    const badStart = await callTool(harness, 'depot_get_usage', {
       startAt: 'last tuesday',
       endAt: '2026-09-01',
     });
-    expect(badDate.isError).toBe(true);
-    expect(badDate.text).toContain('RFC 3339');
+    expect(badStart.isError).toBe(true);
+    expect(badStart.text).toContain('startAt');
+    expect(badStart.text).toContain('RFC 3339');
+
+    const badEnd = await callTool(harness, 'depot_get_usage', {
+      startAt: '2026-08-01',
+      endAt: 'not a date',
+    });
+    expect(badEnd.isError).toBe(true);
+    expect(badEnd.text).toContain('endAt');
+    expect(badEnd.text).toContain('RFC 3339');
+    expect(harness.callsTo(RPC.getUsage)).toHaveLength(0);
   });
 });
 

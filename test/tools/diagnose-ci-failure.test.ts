@@ -1,6 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  UNTRUSTED_CI_CONTENT_WARNING,
+  UNTRUSTED_CONTENT_BEGIN,
+  UNTRUSTED_CONTENT_END,
+} from '../../src/lib/ci-target.js';
 import { AI_DISCLOSURE } from '../../src/lib/diagnosis.js';
-import { callTool, createHarness, fixture, NOT_FOUND, ok, type Harness } from '../helpers/harness.js';
+import {
+  callTool,
+  connectError,
+  createHarness,
+  fixture,
+  NOT_FOUND,
+  ok,
+  type Harness,
+} from '../helpers/harness.js';
 import { RPC } from '../helpers/rpcs.js';
 
 let harness: Harness | undefined;
@@ -50,6 +63,28 @@ describe('depot_diagnose_ci_failure — grouped_failures', () => {
     expect(result.text).toContain('AssertionError: expected 200 to equal 503');
     expect(result.text).toContain('acme/api@9c1f4ab7');
     expect(result.text).toContain(AI_DISCLOSURE);
+  });
+
+  it('fences CI-derived text and labels AI prose as unverified', async () => {
+    harness = await createHarness({
+      routes: { [RPC.getFailureDiagnosis]: ok(fixture('diagnosis-grouped')) },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_ci_failure', { id: 'run_7f3d9c21' });
+
+    expect(result.structured.contentWarning).toBe(UNTRUSTED_CI_CONTENT_WARNING);
+    expect(result.text).toContain("Depot's diagnosis (unverified): The health endpoint");
+    expect(result.text).toContain("Depot's suggested fix (unverified, from CI output): Await");
+
+    const begin = result.text.indexOf(UNTRUSTED_CONTENT_BEGIN);
+    const end = result.text.indexOf(UNTRUSTED_CONTENT_END);
+    expect(begin).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(begin);
+    const fenced = result.text.slice(begin, end);
+    expect(fenced).toContain('Context: acme/api');
+    expect(fenced).toContain('AssertionError: expected 200 to equal 503');
+    expect(fenced).toContain('View logs for test (18)');
+    expect(result.text.slice(end)).toContain(AI_DISCLOSURE);
   });
 
   it('sends the inferred target type and only one request for a prefixed id', async () => {
@@ -169,8 +204,10 @@ describe('depot_diagnose_ci_failure — other states', () => {
     expect(result.structured.state).toBe('empty');
     expect(result.structured.emptyReason).toBe('no_failure_evidence');
     expect(asArray(result.structured.failureGroups)).toHaveLength(0);
+    expect(asRecord(result.structured.target).status).toBe('finished');
     expect(result.text).toContain('no failure evidence');
     expect(result.text).toContain('depot_list_ci_runs');
+    expect(result.text).toContain(UNTRUSTED_CONTENT_END);
   });
 
   it('turns over_limit into narrower targets the agent can re-call with', async () => {
@@ -210,6 +247,35 @@ describe('depot_diagnose_ci_failure — identifier resolution', () => {
     const attempted = harness.callsTo(RPC.getFailureDiagnosis).map((call) => call.body.targetType);
     expect(attempted).toEqual(['RUN', 'WORKFLOW', 'JOB', 'ATTEMPT']);
     expect(result.structured.resolvedTargetType).toBe('attempt');
+  });
+
+  it('also falls through when Depot rejects the id with invalid_argument', async () => {
+    const wrongKind = connectError(400, 'invalid_argument', 'id is not a run');
+    harness = await createHarness({
+      routes: {
+        [RPC.getFailureDiagnosis]: [wrongKind, NOT_FOUND, wrongKind, ok(fixture('diagnosis-focused'))],
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_ci_failure', { id: '01JQ9Z8ABCDEF' });
+
+    expect(result.isError).toBe(false);
+    expect(harness.callsTo(RPC.getFailureDiagnosis)).toHaveLength(4);
+    expect(result.structured.resolvedTargetType).toBe('attempt');
+  });
+
+  it('does not mask other Depot errors as a wrong-kind fall-through', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getFailureDiagnosis]: connectError(403, 'permission_denied', 'token lacks ci scope'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_ci_failure', { id: '01JQ9Z8ABCDEF' });
+
+    expect(result.isError).toBe(true);
+    expect(harness.callsTo(RPC.getFailureDiagnosis)).toHaveLength(1);
+    expect(result.text).toContain('permission_denied');
   });
 
   it('respects an explicit targetType and does not guess', async () => {

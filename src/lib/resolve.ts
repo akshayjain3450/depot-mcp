@@ -24,6 +24,10 @@ export function toDiagnosisTargetType(target: CiTargetType): DiagnosisTargetType
   }
 }
 
+/**
+ * No production code path calls this yet; it is kept because the unit suite pins the wire
+ * spellings it accepts, and any parser that reads a Depot targetType enum should route through it.
+ */
 export function normalizeTargetType(value: string | undefined): CiTargetType | undefined {
   if (value === undefined) {
     return undefined;

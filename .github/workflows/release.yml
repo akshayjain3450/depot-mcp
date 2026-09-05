@@ -1,0 +1,60 @@
+name: Release
+
+# Publishes to npm with provenance when a v* tag is pushed.
+#
+# One-time setup:
+#   1. Create an npm Automation token (npmjs.com > Access Tokens > Granular, publish rights on depot-mcp)
+#      and store it as the repository secret NPM_TOKEN.
+#   2. The tag must equal the version in package.json, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+#
+# Provenance needs `id-token: write` and a public repository on GitHub-hosted runners.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - name: Tag must match package.json version
+        run: |
+          pkg="v$(node -p "require('./package.json').version")"
+          if [ "$pkg" != "${GITHUB_REF_NAME}" ]; then
+            echo "tag ${GITHUB_REF_NAME} does not match package.json version ${pkg}"
+            exit 1
+          fi
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - run: node .github/scripts/check-metadata.mjs
+      - run: node .github/scripts/mcp-smoke.mjs dist/index.js
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Print MCP registry follow-up
+        run: |
+          echo "Published. To update the MCP Registry entry, run locally:"
+          echo "  mcp-publisher login github && mcp-publisher publish"
+          echo "server.json already carries this version."

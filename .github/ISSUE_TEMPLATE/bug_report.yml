@@ -1,0 +1,85 @@
+name: Bug report
+description: Something returned the wrong result, crashed, or failed to start.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Never paste a Depot token, a full `.env`, or unredacted CI variable values into an issue.
+        Tool output may contain repository names and log lines; trim anything you do not want public.
+
+  - type: input
+    id: version
+    attributes:
+      label: depot-mcp version
+      description: From `npx depot-mcp --version` is not available yet; use the git SHA or the npm version.
+      placeholder: 0.1.0 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: client
+    attributes:
+      label: MCP client and version
+      placeholder: Claude Code 2.x / Cursor 1.x / VS Code 1.10x / Codex CLI ...
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: node --version
+    validations:
+      required: true
+
+  - type: dropdown
+    id: tool
+    attributes:
+      label: Which tool or area
+      options:
+        - depot_diagnose_ci_failure
+        - depot_diagnose_build
+        - depot_whoami
+        - depot_list_ci_runs / depot_get_ci_run
+        - depot_get_ci_logs / depot_get_ci_job_summary / depot_get_ci_metrics
+        - depot_list_ci_artifacts
+        - depot_list_builds / depot_list_projects / depot_get_project
+        - depot_get_usage / depot_list_images
+        - depot_list_ci_secrets / depot_list_ci_variables
+        - prompts
+        - startup / configuration
+        - other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you asked the agent to do, which tool it called, and what came back.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Server stderr or client logs
+      description: The server writes diagnostics to stderr. Redact anything sensitive.
+      render: text
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I ran `depot_whoami` and it did not explain the problem (for example the multi-organization case).
+        - label: I have not included a token or secret in this report.
+          required: true

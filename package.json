@@ -1,18 +1,36 @@
 {
   "name": "depot-mcp",
   "version": "0.1.0",
-  "description": "Read-only Model Context Protocol server for depot.dev — CI failure diagnosis, build forensics, and usage insight for coding agents",
+  "description": "depot.dev MCP server: read-only CI failure diagnosis, container build forensics, and usage insight for coding agents",
   "keywords": [
-    "mcp",
-    "modelcontextprotocol",
-    "depot",
     "depot.dev",
+    "depot",
+    "depot-ci",
+    "depot-mcp",
+    "container-builds",
+    "github-actions",
     "ci",
-    "docker",
     "buildkit",
+    "docker",
+    "mcp",
+    "mcp-server",
+    "modelcontextprotocol",
     "agent"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": {
+    "name": "Akshay Jain",
+    "url": "https://github.com/akshayjain3450"
+  },
+  "homepage": "https://github.com/akshayjain3450/depot-mcp#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshayjain3450/depot-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/akshayjain3450/depot-mcp/issues"
+  },
+  "mcpName": "io.github.akshayjain3450/depot-mcp",
   "type": "module",
   "engines": {
     "node": ">=20.0.0"
@@ -20,12 +38,25 @@
   "bin": {
     "depot-mcp": "dist/index.js"
   },
-  "main": "dist/index.js",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js"
+    },
+    "./package.json": "./package.json"
+  },
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "NOTICE"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json && chmod +x dist/index.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -34,6 +65,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "tsx --env-file-if-exists=.env scripts/smoke.ts",
+    "smoke:stdio": "node .github/scripts/mcp-smoke.mjs dist/index.js",
+    "check:metadata": "node .github/scripts/check-metadata.mjs",
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
     "prepublishOnly": "npm run build"
   },

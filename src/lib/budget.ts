@@ -6,6 +6,12 @@ export interface TruncatedText {
 
 const ELLIPSIS = '…';
 
+/**
+ * Longest single log line body any tool returns, in prose or structuredContent. Window budgets
+ * keep at least one entry, so without this a single enormous line would be that entry.
+ */
+export const MAX_LOG_LINE_CHARS = 2_000;
+
 export function truncateText(value: string, limit: number): TruncatedText {
   if (value.length <= limit) {
     return { text: value, truncated: false, originalLength: value.length };
@@ -65,9 +71,16 @@ export function keepHeadWithinBudget<T>(
   return { kept, dropped: entries.length - kept.length };
 }
 
+/** Below this many characters a truncated fragment is noise, so the line is dropped instead. */
+const MIN_USEFUL_FRAGMENT_CHARS = 16;
+
 /**
  * Accumulates the human-readable summary text for a tool result and stops accepting lines once
  * the character budget is spent, so no tool can return unbounded prose to the model.
+ *
+ * Overflow is terminal: the line that overflows is cut down to whatever room remains (or dropped
+ * when that room is too small to be useful) and every later push is refused, so the rendered
+ * text is always a prefix of what was pushed rather than a prefix with holes in it.
  */
 export class TextBudget {
   private readonly lines: string[] = [];
@@ -78,12 +91,22 @@ export class TextBudget {
 
   push(...lines: string[]): this {
     for (const line of lines) {
-      if (this.used + line.length + 1 > this.limit) {
-        this.overflowed = true;
+      if (this.overflowed) {
         return this;
       }
-      this.lines.push(line);
-      this.used += line.length + 1;
+      const room = this.limit - this.used - 1;
+      if (line.length <= room) {
+        this.lines.push(line);
+        this.used += line.length + 1;
+        continue;
+      }
+      this.overflowed = true;
+      if (room >= MIN_USEFUL_FRAGMENT_CHARS) {
+        const fragment = truncateText(line, room).text;
+        this.lines.push(fragment);
+        this.used += fragment.length + 1;
+      }
+      return this;
     }
     return this;
   }

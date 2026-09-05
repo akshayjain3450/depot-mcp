@@ -1,108 +1,81 @@
-# depot-mcp
+# depot-mcp: MCP server for Depot (depot.dev)
 
-A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for [Depot](https://depot.dev). It gives a coding agent Depot's own answer to "why did CI fail?" and "why did this build fail?", plus the run history, cache effectiveness, registry contents, CI configuration, and usage data behind those answers.
+A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for **[Depot](https://depot.dev), the container build and CI acceleration service**. It gives a coding agent Depot's own answer to "why did CI fail?" and "why did this build fail?", plus the run history, cache effectiveness, registry contents, CI configuration, and usage data behind those answers.
 
-**Community project. Not affiliated with, endorsed by, or supported by Depot.**
+[![CI](https://github.com/akshayjain3450/depot-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/akshayjain3450/depot-mcp/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/depot-mcp?logo=npm&label=npm)](https://www.npmjs.com/package/depot-mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.GITHUB__OWNER%2Fdepot--mcp-lightgrey)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.akshayjain3450/depot-mcp)
+[![License](https://img.shields.io/badge/license-Apache--2.0_with_Commons_Clause-blue)](./LICENSE)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js&logoColor=white)](./.nvmrc)
+
+**Community project. Not affiliated with, endorsed by, or supported by Depot.** Source-available under Apache 2.0 with the Commons Clause; see [License](#license).
+
+**Not to be confused with:** The Home Depot, Chromium's `depot_tools`, Steam depots, Perforce depots, or any other "depot". This server talks only to `api.depot.dev`.
+
+## Contents
+
+- [Why this exists](#why-this-exists)
+- [Status](#status)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Compatibility](#compatibility)
+- [Where to find it](#where-to-find-it)
+- [Configuration](#configuration)
+- [Tools](#tools)
+- [Read-only model and security](#read-only-model-and-security)
+- [Limitations](#limitations)
+- [Architecture](#architecture)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Why this exists
 
-Depot ships a genuinely good agent story already — it just isn't MCP. Depot's answer is [Agent Skills](https://github.com/depot/skills), four `SKILL.md` files that teach an agent to drive the `depot` CLI, plus a documented CI API and `llms.txt`. Depot's own post announcing Skills notes two limitations: skills work best in clients that implement the `SKILL.md` convention, and they are "sometimes notorious for not being automatically used by agents."
+Depot ships a good agent story already, but it is not MCP. Depot's answer is [Agent Skills](https://github.com/depot/skills): `SKILL.md` files that teach an agent to drive the `depot` CLI, plus a documented CI API and `llms.txt`. Depot's own post announcing Skills notes two limitations: skills work best in clients that implement the `SKILL.md` convention, and they are "sometimes notorious for not being automatically used by agents."
 
 This server covers the gaps that leaves:
 
 - **Agents without a shell.** Skills require a logged-in `depot` binary on the machine. A tool call does not.
 - **Clients that don't read `SKILL.md`.** MCP is client-agnostic.
 - **Reliable invocation.** A registered tool with a description is discovered through the protocol rather than hopefully retrieved.
-- **A read-only boundary.** A skill cannot stop an agent from running `depot ci rerun`. This server can, and does — see [Security](#security).
+- **A read-only boundary.** A skill cannot stop an agent from running `depot ci rerun`. This server can, and does; see [Read-only model and security](#read-only-model-and-security).
 
-The flagship tool is a thin, careful wrapper around something Depot already built and nobody else has: `GetFailureDiagnosis`, a server-side failure analysis that clusters a run's failures by root cause and returns a diagnosis, a suggested fix, and the evidence lines — already bounded, so it fits in a context window. Most of this server's value is exposing that well.
+The flagship tool is a thin, careful wrapper around something Depot already built: `GetFailureDiagnosis`, a server-side failure analysis that clusters a run's failures by root cause and returns a diagnosis, a suggested fix, and the evidence lines, already bounded so it fits in a context window. Most of this server's value is exposing that well.
 
-At the time of writing, no MCP server for Depot existed anywhere — not first-party, not in the official registry, not on npm or PyPI.
+### How it compares to Depot Agent Skills
+
+| | Depot Agent Skills | depot-mcp |
+| --- | --- | --- |
+| Needs the `depot` CLI installed and logged in | yes | no |
+| Works in clients without `SKILL.md` support | no | yes |
+| Invocation | agent must retrieve the skill | tool is listed in `tools/list` |
+| Can mutate Depot (rerun, cancel, reset) | yes, anything the CLI can | no tool can |
+| Output bounded for a context window | depends on the CLI command | every tool |
+| Maintained by | Depot | community |
+
+As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise, in the official registry, on npm, or on PyPI), and Depot's own guidance for agents without a shell is to call the CI API directly. This server is that API call, shaped for an agent.
 
 ## Status
 
 - **Read-only.** v1 registers no tool that can change anything. There is no retry, cancel, rerun, dispatch, delete, or token-minting tool.
 - **Depot CI is beta**, per Depot's own documentation. The CI tools are the most valuable ones here and also the most likely to shift under you.
-- **Not published to npm.** Run it from a clone, as below. The name `depot-mcp` is unclaimed on npm.
-- **MCP protocol revision `2025-11-25`.** The current spec revision is `2026-07-28`, but the official TypeScript SDK does not implement it yet; `2025-11-25` is an explicitly supported backward-compatible revision and is what the SDK speaks. The transport layer is one thin file so that bump is a dependency upgrade.
+- **Publishing to npm is pending.** The `npx depot-mcp` forms below will work once 0.1.0 is published; until then use the [from a clone](#from-a-clone) path. The name `depot-mcp` is unclaimed on npm and PyPI as of 2026-09-05.
+- **MCP protocol revision `2025-11-25`.** This server is built on the `@modelcontextprotocol/sdk` 1.x line, which speaks `2025-11-25`. The current spec revision is `2026-07-28`, implemented by the v2 packages (`@modelcontextprotocol/server` 2.0.0, published 2026-07-28), which also serve `2025-11-25` clients. Every current client negotiates `2025-11-25`, so nothing is lost today. Moving to v2 is a planned, contained change: the SDK is imported in nine files and the transport wiring lives in `src/index.ts`.
 
-## Requirements
+## Prerequisites
 
-- Node.js 20 or newer.
-- A Depot **Organization token** (Depot dashboard → Organization Settings → API Tokens). A user token from `depot login` also works but spans every organization you belong to.
+- **Node.js 20 or newer** (`node --version`). The Docker image needs no Node on the host.
+- **A Depot Organization token.** Depot dashboard, Organization Settings, API Tokens. A user token from `depot login` also works but spans every organization you belong to, so set `DEPOT_ORG_ID` too.
 - **Project tokens will not work.** Depot's own scope matrix excludes them from Depot CI and the API entirely.
 
-## Install and configure
+Create a dedicated token for this server so you can revoke it independently. Depot has no read-only token scope; read [the security section](#read-only-model-and-security) before you paste one anywhere.
 
-### From a clone (works today)
+## Installation
 
-```bash
-git clone <your-fork-or-clone-url> depot-mcp
-cd depot-mcp
-npm install
-npm run build
-```
+Every client below runs the same command over stdio. The only things that vary are the file the config lives in and how that client lets you keep the token out of the file.
 
-Then point your client at `node /absolute/path/to/depot-mcp/dist/index.js`.
-
-**Claude Desktop** — `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS, `%APPDATA%\Claude\claude_desktop_config.json` on Windows:
-
-```json
-{
-  "mcpServers": {
-    "depot": {
-      "command": "node",
-      "args": ["/absolute/path/to/depot-mcp/dist/index.js"],
-      "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
-      }
-    }
-  }
-}
-```
-
-**Claude Code** — either run:
-
-```bash
-claude mcp add depot --env DEPOT_TOKEN=dp_your_organization_token \
-  -- node /absolute/path/to/depot-mcp/dist/index.js
-```
-
-or commit a `.mcp.json` at your repository root to share it with the team:
-
-```json
-{
-  "mcpServers": {
-    "depot": {
-      "command": "node",
-      "args": ["/absolute/path/to/depot-mcp/dist/index.js"],
-      "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
-      }
-    }
-  }
-}
-```
-
-**Cursor** — `~/.cursor/mcp.json` for every project, or `.cursor/mcp.json` for one:
-
-```json
-{
-  "mcpServers": {
-    "depot": {
-      "command": "node",
-      "args": ["/absolute/path/to/depot-mcp/dist/index.js"],
-      "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
-      }
-    }
-  }
-}
-```
-
-### Via npx (once published)
-
-If this package is ever published, every block above collapses to the same three lines in any client:
+The generic config, which works as-is in Claude Desktop, Cursor, Windsurf, Cline, JetBrains, and most other clients:
 
 ```json
 {
@@ -118,56 +91,341 @@ If this package is ever published, every block above collapses to the same three
 }
 ```
 
+Add `"DEPOT_ORG_ID": "..."` to `env` if your token can see more than one organization. Every tool is prefixed `depot_`, and tool names are stable across releases.
+
+### Claude Code
+
+```bash
+claude mcp add depot --scope user --env DEPOT_TOKEN=dp_your_organization_token -- npx -y depot-mcp
+```
+
+Or commit a `.mcp.json` at the repository root so the whole team gets it. Claude Code expands `${VAR}` and `${VAR:-default}` in `command`, `args`, `env`, `url`, and `headers`, so the token stays in each developer's shell environment and out of git. Copy [`.mcp.json.example`](./.mcp.json.example):
+
+```json
+{
+  "mcpServers": {
+    "depot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "${DEPOT_TOKEN}",
+        "DEPOT_ORG_ID": "${DEPOT_ORG_ID:-}"
+      }
+    }
+  }
+}
+```
+
+Claude Code prompts on every MCP tool call regardless of `readOnlyHint`. To stop being asked, allow the read-only tools in `.claude/settings.json`: `"permissions": { "allow": ["mcp__depot__*"] }`.
+
+### Claude Desktop
+
+Two options.
+
+**Extension bundle (one click).** Download `depot-mcp.mcpb` from the [releases page](https://github.com/akshayjain3450/depot-mcp/releases), open it with Claude Desktop (or Settings, Extensions, Advanced settings, Install extension), and paste the token into the settings form. The token field is marked sensitive in [`manifest.json`](./manifest.json), so Claude Desktop stores it in the OS keychain rather than in a JSON file.
+
+**Manual JSON.** Edit `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS or `%APPDATA%\Claude\claude_desktop_config.json` on Windows and add the generic config above.
+
+### Cursor
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=depot&config=eyJjb21tYW5kIjoibnB4IiwiYXJncyI6WyIteSIsImRlcG90LW1jcCJdLCJlbnYiOnsiREVQT1RfVE9LRU4iOiIifX0%3D)
+
+The button pre-fills the server; fill in `DEPOT_TOKEN` when Cursor shows the config. Or edit `~/.cursor/mcp.json` (all projects) or `.cursor/mcp.json` (one project). Cursor resolves `${env:NAME}` in `command`, `args`, `env`, `url`, and `headers`, so a committed project file can read the token from the environment:
+
+```json
+{
+  "mcpServers": {
+    "depot": {
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "${env:DEPOT_TOKEN}"
+      }
+    }
+  }
+}
+```
+
+### VS Code and GitHub Copilot
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_depot--mcp-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2520(dp_...)%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
+[![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_depot--mcp-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2520(dp_...)%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
+
+The buttons register the server and prompt for the token once, storing it as a VS Code secret. Equivalent `.vscode/mcp.json` (safe to commit: the token is an input, not a value):
+
+```json
+{
+  "inputs": [
+    {
+      "type": "promptString",
+      "id": "depot-token",
+      "description": "Depot Organization token (dp_...)",
+      "password": true
+    }
+  ],
+  "servers": {
+    "depot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "${input:depot-token}"
+      }
+    }
+  }
+}
+```
+
+Or from a terminal: `code --add-mcp '{"name":"depot","command":"npx","args":["-y","depot-mcp"],"env":{"DEPOT_TOKEN":"dp_..."}}'`. Copilot Chat in VS Code uses whatever is in `mcp.json`; use "MCP: Open User Configuration" for a user-level file.
+
+### GitHub Copilot coding agent
+
+Repository Settings, Copilot, Coding agent, MCP configuration. Secrets must be Copilot environment secrets whose names start with `COPILOT_MCP_`:
+
+```json
+{
+  "mcpServers": {
+    "depot": {
+      "type": "local",
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "$COPILOT_MCP_DEPOT_TOKEN"
+      },
+      "tools": ["*"]
+    }
+  }
+}
+```
+
+### OpenAI Codex CLI
+
+```bash
+codex mcp add depot --env DEPOT_TOKEN=dp_your_organization_token -- npx -y depot-mcp
+```
+
+Or in `~/.codex/config.toml`. `env_vars` forwards named variables from your shell so the token need not be written into the file:
+
+```toml
+[mcp_servers.depot]
+command = "npx"
+args = ["-y", "depot-mcp"]
+env_vars = ["DEPOT_TOKEN", "DEPOT_ORG_ID"]
+```
+
+### Gemini CLI
+
+```bash
+gemini mcp add -e DEPOT_TOKEN=dp_your_organization_token depot npx -y depot-mcp
+```
+
+Or in `~/.gemini/settings.json`. Gemini CLI expands `$VAR` and `${VAR}` inside `env`:
+
+```json
+{
+  "mcpServers": {
+    "depot": {
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "$DEPOT_TOKEN"
+      }
+    }
+  }
+}
+```
+
+### Windsurf
+
+`~/.codeium/windsurf/mcp_config.json`, or Windsurf Settings, Cascade, MCP Servers, Manage. Use the generic config above.
+
+### Zed
+
+`settings.json`:
+
+```json
+{
+  "context_servers": {
+    "depot": {
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "dp_your_organization_token"
+      }
+    }
+  }
+}
+```
+
+### Cline
+
+Cline panel, MCP Servers, Configure (or `~/.cline/mcp.json` for the CLI). The generic config works; Cline also accepts `"disabled": false` and `"autoApprove": ["depot_whoami", "depot_diagnose_ci_failure"]` per server.
+
+### JetBrains AI Assistant
+
+Settings, Tools, AI Assistant, Model Context Protocol (MCP), Add, then paste the generic config as JSON. If you already configured Claude Desktop, "Import from Claude" picks it up.
+
+### Docker
+
+No Node.js on the host. The image is stdio, so `-i` is required and `-t` must not be used. Pass the token from your environment rather than on the command line:
+
+```bash
+docker build -t depot-mcp .
+export DEPOT_TOKEN=dp_your_organization_token
+docker run -i --rm -e DEPOT_TOKEN -e DEPOT_ORG_ID depot-mcp
+```
+
+Client config for the image:
+
+```json
+{
+  "mcpServers": {
+    "depot": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "DEPOT_TOKEN", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "dp_your_organization_token"
+      }
+    }
+  }
+}
+```
+
+A published image at `ghcr.io/akshayjain3450/depot-mcp` and a Docker MCP Catalog entry are planned; see [Where to find it](#where-to-find-it).
+
+### From a clone
+
+Works today, before the npm publish:
+
+```bash
+git clone https://github.com/akshayjain3450/depot-mcp.git
+cd depot-mcp
+npm install
+npm run build
+```
+
+Then replace `"command": "npx", "args": ["-y", "depot-mcp"]` in any block above with `"command": "node", "args": ["/absolute/path/to/depot-mcp/dist/index.js"]`. For Claude Code:
+
+```bash
+claude mcp add depot --env DEPOT_TOKEN=dp_your_organization_token -- node /absolute/path/to/depot-mcp/dist/index.js
+```
+
 ### Checking it works
 
 ```bash
-npx @modelcontextprotocol/inspector node dist/index.js
+npx @modelcontextprotocol/inspector npx -y depot-mcp      # or: node dist/index.js
 ```
 
-Then, from your agent, ask it to call `depot_whoami`. That confirms the token, reports which organizations and projects it can see, and warns about the organization ambiguity described below.
+Then, from your agent, ask it to call `depot_whoami`. That confirms the token, reports which organizations and projects it can see, and warns about the organization ambiguity described under [Configuration](#the-organization-gotcha).
+
+The binary also answers two flags without needing a token:
+
+```bash
+npx depot-mcp --version   # prints the version from package.json
+npx depot-mcp --help      # usage, environment variables, exit codes
+```
+
+Importing the package (`import { createServer } from 'depot-mcp'`) gives you the server factory without starting anything; only the `depot-mcp` binary opens stdio.
+
+## Compatibility
+
+The server speaks stdio only. Anything that can launch a local process and talk MCP `2025-11-25` (or negotiate down to it) works. "Tested" means exercised end to end by a maintainer with a real token; "verified" means the config shape was checked against the vendor's documentation on 2026-09-05 but not run.
+
+| Client | Transport | Status | Notes |
+| --- | --- | --- | --- |
+| MCP Inspector | stdio | tested | `npm run inspect` |
+| CI stdio smoke (`initialize` + `tools/list`) | stdio | tested | runs on every commit, Node 20 and 22 |
+| Claude Code | stdio | verified | `${VAR}` expansion in `.mcp.json`; prompts per call unless allowlisted |
+| Claude Desktop | stdio, `.mcpb` | verified | honours `readOnlyHint` for auto-approval |
+| Cursor | stdio | verified | `${env:VAR}`; one-click deeplink |
+| VS Code / Copilot Chat | stdio | verified | `inputs` keep the token out of the file; one-click link |
+| GitHub Copilot coding agent | stdio (`type: local`) | verified | secrets must be prefixed `COPILOT_MCP_` |
+| OpenAI Codex CLI | stdio | verified | `env_vars` forwards from the shell |
+| Gemini CLI | stdio | verified | `$VAR` expansion in `env` |
+| Windsurf | stdio | verified | generic config |
+| Zed | stdio | verified | `context_servers` key |
+| Cline | stdio | verified | `autoApprove` per tool |
+| JetBrains AI Assistant | stdio | verified | can import Claude Desktop config |
+| Docker (any client) | stdio via `docker run -i` | verified | image built in CI; distroless runtime |
+| Streamable HTTP / remote | not offered | | the token would leave the machine; see Security |
+
+If you run it somewhere not listed, open an issue with the client name and the config that worked.
+
+## Where to find it
+
+Planned distribution, in order of usefulness. Items marked pending need the npm publish first.
+
+| Channel | Identifier | Status |
+| --- | --- | --- |
+| npm | [`depot-mcp`](https://www.npmjs.com/package/depot-mcp) | pending (`release.yml` publishes with provenance on a `v*` tag) |
+| Official MCP Registry | `io.github.akshayjain3450/depot-mcp` ([`server.json`](./server.json)) | pending; `mcp-publisher publish` after npm |
+| Claude Desktop extension | `depot-mcp.mcpb` on GitHub releases ([`manifest.json`](./manifest.json)) | pending |
+| Docker MCP Catalog | PR to [docker/mcp-registry](https://github.com/docker/mcp-registry) with a `server.yaml` pointing at this repo's [Dockerfile](./Dockerfile) | pending |
+| GitHub Container Registry | `ghcr.io/akshayjain3450/depot-mcp` | pending |
+| Smithery | listing only; Smithery dropped hosted stdio servers in September 2025, and this server is stdio by design | pending |
+| Glama, PulseMCP, awesome-mcp-servers | directory listings | pending |
+
+Never look for it under `@depot/*` or `dev.depot/*`; those namespaces belong to Depot, and this project is not theirs.
 
 ## Configuration
 
-Every setting is an environment variable, set in your client's config JSON.
+Every setting is an environment variable, set in your client's config.
 
 | Variable | Required | Default | Purpose |
 | --- | --- | --- | --- |
-| `DEPOT_TOKEN` | **yes** | — | Depot API token. The server refuses to start without it. |
-| `DEPOT_ORG_ID` | no | — | Sent as `x-depot-org`. **Set this if your token can see more than one organization** (see below). |
-| `DEPOT_PROJECT_ID` | no | — | Default container-build project, so build tools can be called without one. |
-| `DEPOT_API_URL` | no | `https://api.depot.dev` | Override the API endpoint. |
+| `DEPOT_TOKEN` | **yes** | | Depot API token. Must be a single line of printable ASCII; a line break copied from a wrapped terminal is rejected at startup without echoing the value. The server refuses to start without it (exit code 78). |
+| `DEPOT_ORG_ID` | no | | Sent as `x-depot-org`. **Set this if your token can see more than one organization** (see below). |
+| `DEPOT_PROJECT_ID` | no | | Default container-build project, so build tools can be called without one. |
+| `DEPOT_API_URL` | no | `https://api.depot.dev` | Override the API endpoint. Must be `https://`; plain `http://` is accepted only for localhost, for running against a stub. |
 | `DEPOT_MCP_MAX_LOG_PAGES` | no | `20` | Cap on log/step pages fetched per tool call, so one call can't walk a gigabyte of logs. |
 | `DEPOT_MCP_OUTPUT_BUDGET` | no | `24000` | Hard character ceiling on any single tool result. |
-| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing — `depot_whoami` will say so. |
+| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing; `depot_whoami` will say so. |
+
+Each Depot API call has an overall deadline of about 40 seconds, with a bounded number of retries (exponential backoff) for `unavailable`, `deadline_exceeded`, `aborted`, and 429 responses. `invalid_argument`, `not_found`, `permission_denied`, and `failed_precondition` are never retried. A tool that makes several calls (log paging, build diagnosis) can therefore take longer than one deadline; it reports partial results rather than failing outright when a later page times out.
 
 ### The organization gotcha
 
-This is the single most confusing Depot failure mode, and Depot's own Agent Skill calls it out. A user token spans every organization you belong to. When more than one is visible and `DEPOT_ORG_ID` is unset, requests resolve against one organization and everything in the others reads as **empty rather than as an error**. If a list looks wrongly empty, call `depot_whoami` — it detects exactly this and tells you what to set.
+This is the single most confusing Depot failure mode, and Depot's own Agent Skill calls it out. A user token spans every organization you belong to. When more than one is visible and `DEPOT_ORG_ID` is unset, requests resolve against one organization and everything in the others reads as **empty rather than as an error**. If a list looks wrongly empty, call `depot_whoami`; it detects exactly this and tells you what to set.
 
 ## Tools
 
-All 16 are annotated `readOnlyHint: true` and `destructiveHint: false`.
+All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+
+### Diagnosis (start here)
 
 | Tool | Answers |
 | --- | --- |
-| **`depot_diagnose_ci_failure`** | **Why did this CI run/workflow/job/attempt fail?** Clustered root causes, AI diagnosis, suggested fix, evidence lines. Start here. |
-| **`depot_diagnose_build`** | **Why did this container build fail?** Locates the failing step, returns its error and log tail, plus cache effectiveness. |
-| `depot_whoami` | Is my token valid, and what can it see? Diagnoses the organization ambiguity above. |
+| **`depot_diagnose_ci_failure`** | **Why did this CI run/workflow/job/attempt fail?** Clustered root causes, AI diagnosis, suggested fix, evidence lines. |
+| **`depot_diagnose_build`** | **Why did this container build fail?** Locates the failing step, returns its error and log tail, plus cache effectiveness. Reports `logPageCapHit` and `logNextPageToken` when the step's output was longer than the page cap allowed. |
+| `depot_whoami` | Is my token valid, and what can it see? Diagnoses the organization ambiguity above, and warns when `DEPOT_ORG_ID` names an organization the token cannot see. |
+
+### Depot CI
+
+| Tool | Answers |
+| --- | --- |
 | `depot_list_ci_runs` | Which runs happened recently, and which failed? Filter by status, repo, SHA, trigger, PR. |
-| `depot_get_ci_run` | What is this run's workflow → job → attempt tree, and which node broke? |
-| `depot_get_ci_logs` | Bounded raw logs for an attempt: tail by default, `grep`/step/stream filters, forward paging. |
+| `depot_get_ci_run` | What is this run's workflow, job, and attempt tree, and which node broke? |
+| `depot_get_ci_logs` | Bounded raw logs for an attempt: tail by default, `grep`/step/stream filters, forward paging with an exact cursor. Filters run in this server after fetching, so `grep` still reads up to `DEPOT_MCP_MAX_LOG_PAGES` pages. When the page cap stops the walk the result says the log continues, and `pageCapHit` plus `nextPageToken` let you carry on; it never labels the middle of a log as its tail. Line bodies are capped at 2000 characters (`bodyTruncated`). |
 | `depot_get_ci_job_summary` | What did the job publish about itself (the `$GITHUB_STEP_SUMMARY` equivalent)? |
 | `depot_get_ci_metrics` | Was this an OOM kill or CPU starvation? CPU/memory for a run, job, or attempt. |
-| `depot_list_ci_artifacts` | What did the run upload, and what is its signed download URL? |
-| `depot_list_builds` | Recent container builds with duration and cache hit ratio. |
-| `depot_list_projects` | Which build projects exist, in which region, on what hardware, with which cache policy? |
-| `depot_get_project` | One project's full config plus its OIDC trust policies. |
-| `depot_get_usage` | What is driving spend? Build minutes, minutes saved by cache, GitHub Actions runner minutes, storage, sandboxes. |
-| `depot_list_images` | What is in this project's registry, with digests and sizes? |
-| `depot_list_ci_secrets` | Which CI secrets exist and where do they apply? **Names and scoping only** — Depot never returns secret values. |
+| `depot_list_ci_artifacts` | What did the run upload, and what is its signed download URL? Accepts `pageToken`. |
+| `depot_list_ci_secrets` | Which CI secrets exist and where do they apply? **Names and scoping only**; Depot never returns secret values. |
 | `depot_list_ci_variables` | Which CI variables exist, with values and scoping. Credential-shaped values are redacted (see below). |
 
-Two prompts chain these into common workflows: `diagnose-latest-failure` (find the last failed run → diagnose → propose a fix) and `explain-build-slowness` (builds + usage → is it cache misses or more work?).
+### Container builds, projects, registry, usage
+
+| Tool | Answers |
+| --- | --- |
+| `depot_list_builds` | Recent container builds with duration and cache hit ratio. |
+| `depot_list_projects` | Which build projects exist, in which region, on what hardware, with which cache policy? Accepts `pageToken`. |
+| `depot_get_project` | One project's full config plus its OIDC trust policies. |
+| `depot_list_images` | What is in this project's registry, with digests and sizes? |
+| `depot_get_usage` | What is driving spend? Build minutes, minutes saved by cache, GitHub Actions runner minutes, storage, sandboxes. Dates are UTC; a date-only `endAt` includes that whole day. |
+
+### Prompts
+
+Two prompts chain these into common workflows: `diagnose-latest-failure` (find the last failed run, diagnose it, propose a fix) and `explain-build-slowness` (builds plus usage: is it cache misses or more work?).
 
 ### Output is always bounded
 
@@ -177,25 +435,64 @@ Every tool caps its own output and tells the agent when it truncated:
 - `depot_diagnose_ci_failure` propagates Depot's own `bounds` object as plain-language notes, and distinguishes what **Depot** dropped from what **this server** dropped, so a partial diagnosis never looks complete.
 - Every result respects `DEPOT_MCP_OUTPUT_BUDGET`.
 
-## Security
+## Read-only model and security
 
 **Read the first point carefully.**
 
-- **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary** — it is read-only because it defines no mutating tool, not because the token is restricted. Treat `readOnlyHint` as a hint to the client, not as enforcement.
-- **Some operations are permanently out of scope**, not merely deferred: `ProjectService/ResetProject` (deletes all cached data — a plausible-sounding "fix" with an irreversible, invisible, expensive blast radius), `CIService/Run` (executes arbitrary workflow content on your infrastructure), token and secret writes (`CreateToken` returns the secret, which would land in a transcript), image and tag deletion, and `ShareBuild` (creates a public URL — data exposure disguised as a read).
-- **The token is never logged, echoed, or written to disk.** It is read from the environment only, never printed in errors or in `depot_whoami`. This server does not read `~/.config/depot/depot.yaml`, so it cannot pick up ambient credentials you did not intend to give it.
+- **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary**: it is read-only because it defines no mutating tool, not because the token is restricted. Treat `readOnlyHint` as a hint to the client, not as enforcement.
+- **Some operations are permanently out of scope**, not merely deferred: `ProjectService/ResetProject` (deletes all cached data; a plausible-sounding "fix" with an irreversible, invisible, expensive blast radius), `CIService/Run` (executes arbitrary workflow content on your infrastructure), token and secret writes (`CreateToken` returns the secret, which would land in a transcript), image and tag deletion, and `ShareBuild` (creates a public URL; data exposure disguised as a read).
+- **The token is never logged, echoed, or written to disk.** It is read from the environment only, never printed in errors or in `depot_whoami`. Error messages from the transport layer and from Depot's own error envelopes are scrubbed of the token before they reach the model, in case a misconfigured endpoint echoes request headers. This server does not read `~/.config/depot/depot.yaml`, so it cannot pick up ambient credentials you did not intend to give it.
 - **CI variable values are scrubbed.** Depot withholds secret *values* server-side, but returns *variable* values verbatim, and variables get misused as secret storage. Values whose name or content looks like a credential are replaced with a placeholder, and the result reports which rule fired so you still know the variable exists.
 - **Create a dedicated Organization token for this server** so you can revoke it independently.
+- **stdio only, no listening port.** The token crosses no network boundary other than TLS to `api.depot.dev`.
+- **CI logs are untrusted text.** Log lines, step summaries, artifact names, variable values, and Depot's AI diagnoses are derived from repository content, so anyone who can push to a repository that runs on Depot CI can put words in them. This server returns them; it does not act on them. Your agent might. Summaries fence that text between `--- begin untrusted CI content ---` and `--- end untrusted CI content ---`, label Depot's diagnosis and suggested fix as unverified, and carry a `contentWarning` field in structured output. The server instructions tell the model to treat it as data, never as commands.
 - Depot stores CLI credentials in plaintext at `~/.config/depot/depot.yaml` (mode 0600), not the OS keychain. Relevant if you copy a token from there.
+
+How clients treat the annotations differs: Claude Desktop uses `readOnlyHint` for auto-approval, Claude Code prompts on every call unless the tool is allowlisted, and Cursor uses its own run modes. Report security problems as described in [SECURITY.md](./SECURITY.md).
 
 ## Limitations
 
 - **Container builds cannot be started through Depot's API at all**, by anyone. Running a build means acquiring an mTLS BuildKit endpoint and transferring the local build context; the `depot` CLI embeds a BuildKit fork to do it. Builds here are observability only. A human runs `depot build`, or CI does.
-- **`depot.ci.v1` has reference docs but no published schema** — it is absent from both `depot/proto` and the Buf Schema Registry. There is nothing to generate types from and nothing to diff for breaking changes. Rather than assert a contract nobody publishes, responses are read through tolerant accessors that accept either camelCase or snake_case, handle protobuf's int64-as-string encoding, and strip enum name prefixes. Missing fields degrade to "unknown" instead of crashing.
+- **`depot.ci.v1` has reference docs but no published schema.** It is absent from both `depot/proto` and the Buf Schema Registry. There is nothing to generate types from and nothing to diff for breaking changes. Rather than assert a contract nobody publishes, responses are read through tolerant accessors that accept either camelCase or snake_case, handle protobuf's int64-as-string encoding, and strip enum name prefixes. Missing fields degrade to "unknown" instead of crashing.
 - **`depot_get_ci_metrics` returns Depot's raw document alongside the fields it recognises**, because Depot documents that these RPCs return CPU and memory summaries without publishing their field names.
 - **`depot.ci.v3beta2` is beta in its name.** The secrets and variables tools are the most breakage-prone. Their list filters are undocumented, so filtering happens in this server and the request sent to Depot is empty.
 - **No log streaming.** Depot caps concurrent log streams per token *and per organization*, and a careless streaming tool could exhaust that for your whole org, including your real CI. This server polls the unary `GetJobAttemptLogs` instead, which Depot's docs explicitly bless.
 - **There is no `wait_for_run_to_finish` tool**, deliberately. Long polls fit badly inside a tool-call timeout. Ask for status again instead; the agent can poll across turns.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    Client["MCP client<br/>(Claude Code, Cursor, VS Code, Codex, ...)"]
+    Server["depot-mcp<br/>node dist/index.js"]
+    API["api.depot.dev<br/>Connect JSON over HTTPS"]
+
+    Client -- "JSON-RPC over stdio<br/>tools/list, tools/call, prompts" --> Server
+    Server -- "POST /depot.ci.v1.CIService/GetFailureDiagnosis<br/>Authorization: Bearer DEPOT_TOKEN<br/>x-depot-org: DEPOT_ORG_ID" --> API
+    API -- "JSON, read through tolerant accessors" --> Server
+    Server -- "text summary + structuredContent,<br/>capped by DEPOT_MCP_OUTPUT_BUDGET" --> Client
+```
+
+One process, one credential, no listening port, no protobuf toolchain. Depot's Connect binding is plain JSON over HTTP POST, so the client is a `fetch` wrapper with retry. Tools are one module each under `src/tools/`; shared helpers (`budget`, `redact`, `resolve`, `ci-target`) keep them small and their output predictable. Design notes, the Depot API survey, and the prior-art review live in [`docs/`](./docs/README.md) and [`research/`](./research/).
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| Server exits immediately with code 78 | `DEPOT_TOKEN` is unset or empty. The client's `env` block is the usual place it went missing. |
+| Every list is empty but the token is valid | Multi-organization token without `DEPOT_ORG_ID`. Call `depot_whoami`; it names the organizations it can see. |
+| `permission_denied` or `unauthenticated` | Project token (not supported), a revoked token, or the wrong organization. `depot_whoami` distinguishes them. |
+| `depot_diagnose_ci_failure` returns `state: empty` | The run had no failures Depot could cluster, or the ID is not a failed run. `depot_list_ci_runs` with `status: ["failed"]` finds one. |
+| `state: over_limit` | The target is too broad. The result lists `narrowerTargets`; re-call with a workflow or job ID. |
+| Result says `truncated: true` | Expected. Use the `hint` in the result (narrower filter, `grep`, `pageToken`) or raise `DEPOT_MCP_OUTPUT_BUDGET`. |
+| Client shows "response was interrupted" or context errors | The client's own MCP output cap. Prefer the diagnose tools over raw logs, lower `tailLines`, or use `grep`. |
+| `npx` hangs on first run | It is downloading the package. Run `npx -y depot-mcp` once in a terminal, then restart the client. |
+| Nothing in the client but the Inspector works | stdout must carry only JSON-RPC. If you added logging, send it to stderr. |
+| `429 resource_exhausted` | Depot's per-token or per-organization limit. Wait; the server already backs off and retries. |
+| `deadline_exceeded` after about 40 seconds | Depot did not answer within the per-call deadline. Retry; if it persists, narrow the request (fewer pages, a job instead of a run). |
+| `DEPOT_API_URL must be an https URL` | Only `https://` endpoints are accepted, except `http://localhost` for a local stub. |
+
+The server writes one line to stderr on startup (`depot-mcp 0.1.0 ready on stdio ...`); most clients show stderr in their MCP logs.
 
 ## Development
 
@@ -206,6 +503,7 @@ npm run lint        # eslint with type-aware rules
 npm test            # vitest, no network or Depot account needed
 npm run build       # emit dist/
 npm run inspect     # build, then open the MCP Inspector
+npm run smoke:stdio # handshake + tools/list against dist/, no token needed
 ```
 
 Tests drive a real `Client` against a real `McpServer` over the SDK's `InMemoryTransport`, with `fetch` stubbed to return recorded fixtures in `test/fixtures/`. They assert the full round trip: input validation, output-schema conformance, annotations, character budgets, and error translation. The fixtures cover all four `GetFailureDiagnosis` states (`focused_failure`, `grouped_failures`, `over_limit`, `empty`), empty results, and Connect error envelopes.
@@ -216,7 +514,7 @@ Tests drive a real `Client` against a real `McpServer` over the SDK's `InMemoryT
 DEPOT_TOKEN=dp_your_organization_token npm run smoke
 ```
 
-This runs read-only calls only, prints what it found, and reports which checks passed, failed, or were skipped. It skips the failure-diagnosis check if your organization has no failed run to analyse — without one, the flagship tool cannot be exercised.
+This runs read-only calls only, prints what it found, and reports which checks passed, failed, or were skipped. It skips the failure-diagnosis check if your organization has no failed run to analyse; without one, the flagship tool cannot be exercised.
 
 ### Layout
 
@@ -240,13 +538,34 @@ src/
     redact.ts       credential scrubbing
     build.ts  project.ts  resolve.ts  time.ts
   tools/            one module per tool group; index.ts holds the write gate
+test/               vitest: unit, tool round-trips over InMemoryTransport, fixtures
+docs/               design notes and distribution details
 research/           the API and design research this was built from
+.github/            CI, release, smoke and metadata scripts, templates
+server.json         MCP Registry entry      manifest.json   Claude Desktop .mcpb manifest
+Dockerfile          distroless stdio image  .mcp.json.example  Claude Code project config
 ```
 
-`research/` documents the API surface, the MCP design decisions, and the prior-art survey this implementation follows. It is worth reading before changing anything non-obvious.
+`research/` documents the Depot API, the MCP design decisions, and the prior-art survey this implementation follows. It is worth reading before changing anything non-obvious.
+
+## Contributing
+
+Read [CONTRIBUTING.md](./CONTRIBUTING.md) first. The short version: keep it read-only, keep the token out of everything, keep output bounded, test through the MCP client harness, and sign off your commits (`git commit -s`). Bug reports and feature requests have templates; security issues go through [SECURITY.md](./SECURITY.md), not the issue tracker.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+Apache License 2.0 with the [Commons Clause](https://commonsclause.com) License Condition v1.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).
 
-Depot is a trademark of its owner. This project is unaffiliated.
+In plain words, you may:
+
+- use it, at home or at work, including inside commercial CI pipelines and paid products that happen to use Depot;
+- modify it, fork it, and redistribute it, as long as the LICENSE and NOTICE files travel with it;
+- contribute changes back under the same terms.
+
+You may not:
+
+- sell it, charge for hosting it, or offer a paid product or service whose value comes entirely or substantially from this server's functionality.
+
+Because of the Commons Clause this is **source-available, not open source** under the OSI definition. Everything else in Apache 2.0 (patent grant, no warranty, attribution) applies unchanged.
+
+Depot is a trademark of its owner. This project is unaffiliated with Depot Technologies Inc.
