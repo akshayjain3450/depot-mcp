@@ -3,7 +3,7 @@
 #   docker run -i --rm -e DEPOT_TOKEN depot-mcp
 # The server speaks MCP over stdio, so `-i` is required and `-t` must not be used.
 
-FROM node:20-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
