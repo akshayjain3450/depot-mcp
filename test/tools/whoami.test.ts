@@ -127,7 +127,8 @@ describe('depot_whoami', () => {
     expect(result.structured.tokenKind).toBe('user');
     expect(warnings.some((w) => String(w).includes('user token'))).toBe(true);
     expect(result.text).toContain('Organization Settings -> API Tokens');
-    expect(result.text).toContain('CI tools keep working');
+    expect(result.text).toContain('keep working');
+    expect(result.text).toContain('owner does not change this');
   });
 
   it('does not call a 403 on projects a user-token problem', async () => {
