@@ -332,6 +332,8 @@ message BuildStep {
 // GetBuildStepLogsResponse.Log = { message, timestamp }
 ```
 
+**Live findings, 2026-09-06.** The Connect JSON binding of `GetBuildSteps` fails server-side: for a successful build the server answers 500 `cannot encode field depot.build.v1.GetBuildStepsResponse.BuildStep.has_logs to JSON: expected boolean, got 0`, and for a failed build 500 `Error fetching build steps` (intermittently; the same build later returned 7 steps). The binary encoding (`content-type: application/proto`) works for both, so depot-mcp encodes these two RPCs by hand from `build.proto`. `GetBuildStepLogs` returned 500 `internal error` on both encodings for every step with `hasLogs: true` that was tried. Worth reporting to Depot.
+
 **`GetBuildSteps` + `GetBuildStepLogs` are the container-build analogue of CI's diagnose** — per-step cache state, per-step error, and `hasLogs` so you know which step to fetch logs for. There is no server-side AI diagnosis here; the wrapper has to do the "find the failing step, fetch its logs" work itself.
 
 `CreateBuild` returns a short-lived **build token** distinct from the API token; it's what a BuildKit client authenticates with.

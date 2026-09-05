@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DepotApiError } from '../depot/errors.js';
 import { readObjectArray, readString } from '../depot/shape.js';
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep, type BuildStep } from '../lib/build.js';
 import { keepTailWithinBudget, MAX_LOG_LINE_CHARS, TextBudget, truncateText } from '../lib/budget.js';
@@ -63,6 +64,19 @@ async function resolveProjectId(
   );
 }
 
+/**
+ * Depot's build-step endpoints fail server-side for some builds (observed 2026-09-06: 500
+ * "Error fetching build steps" for a failed build, 500 "internal error" for step logs). The
+ * build-level facts from GetBuild are still worth returning, so those failures degrade the
+ * result instead of replacing it.
+ */
+function isDepotSideFailure(error: unknown): error is DepotApiError {
+  return (
+    error instanceof DepotApiError &&
+    (error.code === 'internal' || error.code === 'unavailable' || error.code === 'unknown')
+  );
+}
+
 async function collectSteps(context: ToolContext, projectId: string, buildId: string) {
   const steps: BuildStep[] = [];
   let pageToken: string | undefined;
@@ -74,7 +88,7 @@ async function collectSteps(context: ToolContext, projectId: string, buildId: st
       pageSize: STEP_PAGE_SIZE,
       pageToken,
     });
-    steps.push(...readObjectArray(response, 'steps').map(parseBuildStep));
+    steps.push(...readObjectArray(response, 'buildSteps', 'steps').map(parseBuildStep));
     const next = readString(response, 'nextPageToken');
     if (next === undefined || next === pageToken) {
       break;
@@ -198,13 +212,27 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
       savedDurationSeconds: z.number().optional(),
     }),
     notes: z.array(z.string()),
+    stepsUnavailable: z.boolean().optional(),
+    logsUnavailable: z.boolean().optional(),
   },
   handler: async (input, context) => {
     const build = parseBuild(await context.api.getBuild(input.buildId));
     const projectId = await resolveProjectId(context, input.buildId, input.projectId);
-    const steps = await collectSteps(context, projectId, input.buildId);
-    const failing = selectFailingStep(steps);
     const notes: string[] = [];
+    let steps: BuildStep[] = [];
+    let stepsUnavailable = false;
+    try {
+      steps = await collectSteps(context, projectId, input.buildId);
+    } catch (error) {
+      if (!isDepotSideFailure(error)) {
+        throw error;
+      }
+      stepsUnavailable = true;
+      notes.push(
+        `Depot could not return this build's steps (server-side ${error.code}: ${error.serverMessage ?? 'no detail'}). Only the build-level facts from GetBuild are available; the Depot dashboard's build page may still show the steps.`,
+      );
+    }
+    const failing = selectFailingStep(steps);
 
     if (!isBuildFailure(build.status)) {
       notes.push(
@@ -218,14 +246,22 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
     let logNextPageToken: string | undefined;
     let logLinesTruncated = 0;
     let logPagesFetched = 0;
+    let logsUnavailable = false;
+    let logs: StepLogs | undefined;
     if (failing?.digest !== undefined && failing.hasLogs) {
-      const logs = await collectStepLogs(
-        context,
-        projectId,
-        input.buildId,
-        failing.digest,
-        input.tailLines,
-      );
+      try {
+        logs = await collectStepLogs(context, projectId, input.buildId, failing.digest, input.tailLines);
+      } catch (error) {
+        if (!isDepotSideFailure(error)) {
+          throw error;
+        }
+        logsUnavailable = true;
+        notes.push(
+          `Depot could not return the step's logs (server-side ${error.code}: ${error.serverMessage ?? 'no detail'}); the step's recorded error is shown instead.`,
+        );
+      }
+    }
+    if (logs !== undefined) {
       const budgeted = keepTailWithinBudget(
         logs.lines,
         context.config.outputCharBudget - 1_500,
@@ -252,7 +288,7 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
           `${logs.bodiesTruncated} log line(s) longer than ${MAX_LOG_LINE_CHARS} characters were truncated.`,
         );
       }
-    } else if (failing !== undefined) {
+    } else if (failing !== undefined && !logsUnavailable) {
       notes.push('Depot reports no logs for this step, so only its recorded error is available.');
     }
 
@@ -285,7 +321,12 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
     }
 
     if (failing === undefined) {
-      text.push('', 'Depot returned no steps for this build, so there is nothing to inspect.');
+      text.push(
+        '',
+        stepsUnavailable
+          ? 'Depot could not return the steps for this build, so step-level detail is unavailable (see notes).'
+          : 'Depot returned no steps for this build, so there is nothing to inspect.',
+      );
     } else {
       text.push(
         '',
@@ -333,6 +374,8 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
         logPageCapHit,
         logNextPageToken,
         logLinesTruncated,
+        ...(stepsUnavailable ? { stepsUnavailable: true } : {}),
+        ...(logsUnavailable ? { logsUnavailable: true } : {}),
         cacheSummary: {
           cachedSteps: build.cachedSteps,
           totalSteps: build.totalSteps,

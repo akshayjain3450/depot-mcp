@@ -62,13 +62,13 @@ class BodyTooLargeError extends Error {
  * Reads a body while counting bytes, cancelling the stream as soon as the cap is passed so a
  * runaway response cannot exhaust memory before `text()` would have returned.
  */
-async function readBodyCapped(response: Response, maxBytes: number): Promise<string> {
+async function readBodyCapped(response: Response, maxBytes: number): Promise<Uint8Array> {
   const declared = response.headers.get('content-length');
   if (declared !== null && /^\d+$/.test(declared) && Number(declared) > maxBytes) {
     throw new BodyTooLargeError(Number(declared));
   }
   if (response.body === null) {
-    return response.text();
+    return new Uint8Array(await response.arrayBuffer());
   }
 
   const reader: ReadableStreamDefaultReader<Uint8Array> = response.body.getReader();
@@ -86,9 +86,20 @@ async function readBodyCapped(response: Response, maxBytes: number): Promise<str
     }
     chunks.push(value);
   }
-  const decoder = new TextDecoder();
-  return chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('') + decoder.decode();
+  const joined = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    joined.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return joined;
 }
+
+const PROTO_CONTENT_TYPE = 'application/proto';
+const JSON_CONTENT_TYPE = 'application/json';
+
+/** A request payload: a JSON object for the JSON binding, or encoded bytes for the binary one. */
+export type RpcPayload = JsonObject | Uint8Array;
 
 /**
  * Minimal client for Depot's Connect JSON binding: every unary RPC is
@@ -125,6 +136,28 @@ export class DepotClient {
   }
 
   async call(target: RpcTarget, request: JsonObject = {}): Promise<JsonObject> {
+    const result = await this.execute(target, request);
+    if (result instanceof Uint8Array) {
+      throw new DepotApiError({
+        code: 'internal',
+        httpStatus: 200,
+        rpc: rpcLabel(target),
+        serverMessage: 'Depot answered a JSON request with a binary protobuf body.',
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Sends an already-encoded protobuf request. Depot answers in kind (`application/proto`), in
+   * which case the raw bytes come back for the caller to decode; a JSON body (which the test
+   * harness and any proxy may return) is parsed and returned as an object.
+   */
+  callBinary(target: RpcTarget, request: Uint8Array): Promise<JsonObject | Uint8Array> {
+    return this.execute(target, request);
+  }
+
+  private async execute(target: RpcTarget, request: RpcPayload): Promise<JsonObject | Uint8Array> {
     const deadline = this.now() + this.callDeadlineMs;
     let timeoutRetries = 0;
 
@@ -152,11 +185,13 @@ export class DepotClient {
     }
   }
 
-  private headers(): Record<string, string> {
+  private headers(contentType: string): Record<string, string> {
     const headers: Record<string, string> = {
       authorization: `Bearer ${this.token}`,
-      'content-type': 'application/json',
-      accept: 'application/json',
+      'content-type': contentType,
+      // Connect unary responses use the request's encoding; errors are always JSON.
+      accept:
+        contentType === JSON_CONTENT_TYPE ? JSON_CONTENT_TYPE : `${contentType}, ${JSON_CONTENT_TYPE}`,
       // Required by the Connect protocol for unary requests; without it Depot may reject the call.
       'connect-protocol-version': '1',
     };
@@ -172,30 +207,31 @@ export class DepotClient {
 
   private async attempt(
     target: RpcTarget,
-    request: JsonObject,
+    request: RpcPayload,
     deadline: number,
-  ): Promise<JsonObject> {
+  ): Promise<JsonObject | Uint8Array> {
     const rpc = rpcLabel(target);
     const url = `${this.baseUrl}/${target.service}/${target.method}`;
     const timeoutMs = Math.max(1, Math.min(this.requestTimeoutMs, deadline - this.now()));
+    const binary = request instanceof Uint8Array;
 
     let response: Response;
     try {
       response = await this.fetchImpl(url, {
         method: 'POST',
-        headers: this.headers(),
+        headers: this.headers(binary ? PROTO_CONTENT_TYPE : JSON_CONTENT_TYPE),
         // JSON.stringify drops undefined-valued keys, which is exactly the wire shape we want:
         // protobuf JSON treats an absent field as unset.
-        body: JSON.stringify(request),
+        body: binary ? request : JSON.stringify(request),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch (error) {
       throw this.transportError(rpc, error);
     }
 
-    let body: string;
+    let bytes: Uint8Array;
     try {
-      body = await readBodyCapped(response, this.maxResponseBytes);
+      bytes = await readBodyCapped(response, this.maxResponseBytes);
     } catch (error) {
       if (error instanceof BodyTooLargeError) {
         const size =
@@ -213,16 +249,22 @@ export class DepotClient {
       throw this.transportError(rpc, error);
     }
 
+    const contentType = (response.headers.get('content-type') ?? '').toLowerCase();
     if (!response.ok) {
       throw parseConnectError(
         target,
         response.status,
-        body,
+        contentType.includes(PROTO_CONTENT_TYPE) ? '' : new TextDecoder().decode(bytes),
         parseRetryAfter(response.headers.get('retry-after'), this.now()),
         [this.token],
       );
     }
 
+    if (binary && contentType.includes(PROTO_CONTENT_TYPE)) {
+      return bytes;
+    }
+
+    const body = new TextDecoder().decode(bytes);
     if (body.trim() === '') {
       return {};
     }

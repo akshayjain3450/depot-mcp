@@ -11,7 +11,7 @@ import { DepotApi } from '../src/depot/api.js';
 import { DepotClient } from '../src/depot/client.js';
 import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
 import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
-import { parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
+import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
 import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
 import { parseProject } from '../src/lib/project.js';
@@ -140,7 +140,7 @@ async function main(): Promise<void> {
           `         - ${build.buildId ?? '?'} ${build.status ?? '?'} ${build.cachedSteps ?? 0}/${build.totalSteps ?? 0} cached`,
         );
       }
-      failedBuildId = builds.find((build) => build.status === 'failed')?.buildId;
+      failedBuildId = builds.find((build) => isBuildFailure(build.status))?.buildId;
       return { detail: `${builds.length} build(s) in ${projectId}` };
     });
 
@@ -158,6 +158,7 @@ async function main(): Promise<void> {
     await attempt('GetBuildSteps', async () => {
       const steps = readObjectArray(
         await api.getBuildSteps({ projectId, buildId, pageSize: 500 }),
+        'buildSteps',
         'steps',
       ).map(parseBuildStep);
       const failing = selectFailingStep(steps);
