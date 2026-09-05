@@ -34,6 +34,14 @@ export function formatDuration(seconds: number | undefined): string {
   return `${hours}h${minutes % 60}m`;
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** True for a bare YYYY-MM-DD, which Date.parse reads as midnight UTC. */
+export function isDateOnly(value: string): boolean {
+  return DATE_ONLY.test(value.trim());
+}
+
 /** Depot's usage RPCs take google.protobuf.Timestamp values, which JSON-encode as RFC 3339. */
 export function toRfc3339(value: string): string {
   const parsed = Date.parse(value);
@@ -41,6 +49,19 @@ export function toRfc3339(value: string): string {
     throw new Error(`"${value}" is not a date this server can parse; use RFC 3339 or YYYY-MM-DD.`);
   }
   return new Date(parsed).toISOString();
+}
+
+/**
+ * For the end of a window, a bare date means "through the end of that day". Date.parse reads it
+ * as midnight at the start of the day, which would silently exclude the whole day, so advance to
+ * the next midnight UTC. Full timestamps are taken as given.
+ */
+export function toRfc3339WindowEnd(value: string): string {
+  const iso = toRfc3339(value);
+  if (!isDateOnly(value)) {
+    return iso;
+  }
+  return new Date(Date.parse(iso) + DAY_MS).toISOString();
 }
 
 export function daysAgoRfc3339(days: number, now: number = Date.now()): string {

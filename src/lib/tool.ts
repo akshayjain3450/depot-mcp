@@ -65,7 +65,8 @@ export function defineTool<TInput extends z.ZodRawShape, TOutput extends z.ZodRa
     readOnlyHint: true,
     destructiveHint: false,
     idempotentHint: true,
-    openWorldHint: true,
+    // A fixed, authenticated API rather than the open web; a tool that fans out can override.
+    openWorldHint: false,
     ...spec.annotations,
   };
 
@@ -92,6 +93,8 @@ export function defineTool<TInput extends z.ZodRawShape, TOutput extends z.ZodRa
           annotations,
         },
         async (rawInput: unknown): Promise<CallToolResult> => {
+          // McpServer validates arguments before calling this, so this branch is normally
+          // unreachable; it stays as a guard against a future SDK that stops doing so.
           const parsedInput = inputObject.safeParse(rawInput ?? {});
           if (!parsedInput.success) {
             return toolError(
@@ -112,7 +115,20 @@ export function defineTool<TInput extends z.ZodRawShape, TOutput extends z.ZodRa
             if (error instanceof ToolInputError) {
               return toolError(error.message);
             }
-            throw error;
+            // A bug in this server (a handler that threw, or output that failed its own schema).
+            // The stack goes to stderr for the operator; the client gets a clean error result
+            // instead of a thrown exception rewrapped by the SDK.
+            const message =
+              error instanceof z.ZodError
+                ? `output failed its schema: ${z.prettifyError(error)}`
+                : error instanceof Error
+                  ? error.message
+                  : String(error);
+            console.error(
+              `${spec.name} threw:`,
+              error instanceof Error ? (error.stack ?? error.message) : error,
+            );
+            return toolError(`depot-mcp internal error in ${spec.name}: ${message}`);
           }
         },
       );

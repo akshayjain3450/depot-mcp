@@ -1,0 +1,44 @@
+name: Feature request
+description: Propose a new tool, prompt, or behaviour.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This server is read-only by design. Requests for tools that retry, cancel, rerun, dispatch, or delete
+        anything are welcome to discuss, but read [Security](../blob/HEAD/README.md#security) and
+        [CONTRIBUTING](../blob/HEAD/CONTRIBUTING.md) first: some operations are permanently out of scope.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What question should an agent be able to answer?
+      description: Tools here are shaped around questions, not Depot RPCs. "Why is this job slow?" is a better start than "expose GetJobMetrics".
+    validations:
+      required: true
+
+  - type: textarea
+    id: api
+    attributes:
+      label: Which Depot API backs it?
+      description: Service and method if you know it (for example `depot.ci.v1.CIService/ListRuns`), and a link to Depot's docs.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of change
+      options:
+        - New read-only tool
+        - Change to an existing tool's input or output
+        - New prompt
+        - Mutating tool (behind DEPOT_MCP_ALLOW_WRITES)
+        - Distribution / install / client support
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: What should the result look like?
+      description: Rough shape of the structured output, and how it should stay bounded for a context window.

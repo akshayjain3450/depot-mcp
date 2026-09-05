@@ -1,6 +1,45 @@
-import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, connectError, createHarness, fixture, ok, type Harness } from '../helpers/harness.js';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
+import { DepotApi } from '../../src/depot/api.js';
+import { DepotClient, type FetchLike } from '../../src/depot/client.js';
+import { defineTool, type ToolContext } from '../../src/lib/tool.js';
+import { createServer } from '../../src/server.js';
+import {
+  callTool,
+  connectError,
+  createHarness,
+  fixture,
+  ok,
+  testConfig,
+  type Harness,
+} from '../helpers/harness.js';
 import { RPC } from '../helpers/rpcs.js';
+
+const TOKEN = 'test-token-never-logged';
+
+/** Like createHarness, but with a caller-supplied fetch so transport failures can be staged. */
+async function connectWithFetch(fetchImpl: FetchLike, token = TOKEN): Promise<Harness> {
+  const { server } = createServer({
+    config: testConfig({ token }),
+    fetch: fetchImpl,
+    sleep: () => Promise.resolve(),
+  });
+  const client = new Client({ name: 'depot-mcp-test', version: '0.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+  return {
+    client,
+    calls: [],
+    callsTo: () => [],
+    close: async () => {
+      await client.close();
+      await server.close();
+    },
+  };
+}
 
 let harness: Harness | undefined;
 
@@ -124,5 +163,135 @@ describe('Depot error surfacing through a tool call', () => {
     expect(headers['connect-protocol-version']).toBe('1');
     expect(headers['content-type']).toBe('application/json');
     expect(headers['x-depot-org']).toBeUndefined();
+  });
+});
+
+describe('token never reaches a tool result', () => {
+  it('scrubs a fetch error that quotes the Authorization header', async () => {
+    harness = await connectWithFetch(() =>
+      Promise.reject(new TypeError(`Headers.append: "Bearer ${TOKEN}" is an invalid header value.`)),
+    );
+
+    const result = await callTool(harness, 'depot_list_ci_runs', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.text).not.toContain(TOKEN);
+    expect(result.text).toContain('Could not reach the Depot API');
+  });
+
+  it('scrubs both halves of a token that carries a line break', async () => {
+    const token = 'dp_first_half_0123\r\nsecond_half_4567';
+    harness = await connectWithFetch(
+      () =>
+        Promise.reject(
+          new TypeError(`Headers.append: "Bearer ${token}" is an invalid header value.`),
+        ),
+      token,
+    );
+
+    const result = await callTool(harness, 'depot_list_ci_runs', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.text).not.toContain('dp_first_half_0123');
+    expect(result.text).not.toContain('second_half_4567');
+  });
+
+  it('scrubs a token containing a space from any transport failure', async () => {
+    const token = 'dp_left_part_0123 right_part_4567';
+    harness = await connectWithFetch(
+      () => Promise.reject(new Error(`connect failed for right_part_4567 / dp_left_part_0123`)),
+      token,
+    );
+
+    const result = await callTool(harness, 'depot_list_ci_runs', {});
+
+    expect(result.isError).toBe(true);
+    expect(result.text).not.toContain('dp_left_part_0123');
+    expect(result.text).not.toContain('right_part_4567');
+  });
+});
+
+describe('defineTool internal errors', () => {
+  async function connectTool(
+    tool: ReturnType<typeof defineTool>,
+  ): Promise<{ client: Client; close: () => Promise<void> }> {
+    const server = new McpServer({ name: 'test', version: '0.0.0' });
+    const context: ToolContext = {
+      api: new DepotApi(
+        new DepotClient({
+          token: 't',
+          apiUrl: 'https://api.depot.dev',
+          fetch: () => Promise.resolve(new Response('{}')),
+        }),
+      ),
+      config: testConfig(),
+    };
+    tool.register(server, context);
+    const client = new Client({ name: 'test-client', version: '0.0.0' });
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
+    return {
+      client,
+      close: async () => {
+        await client.close();
+        await server.close();
+      },
+    };
+  }
+
+  it('turns a thrown handler error into a clean isError result and logs the stack to stderr', async () => {
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const tool = defineTool({
+      name: 'depot_test_throws',
+      title: 'Throws',
+      description: 'x',
+      inputSchema: {},
+      outputSchema: { ok: z.boolean() },
+      handler: () => Promise.reject<never>(new Error('handler exploded')),
+    });
+    const { client, close } = await connectTool(tool);
+
+    try {
+      const result = await client.callTool({ name: 'depot_test_throws', arguments: {} });
+      const text = Array.isArray(result.content)
+        ? result.content.map((part) => (part as { text?: string }).text ?? '').join('')
+        : '';
+
+      expect(result.isError).toBe(true);
+      expect(text).toBe('depot-mcp internal error in depot_test_throws: handler exploded');
+      expect(stderr).toHaveBeenCalledWith(
+        'depot_test_throws threw:',
+        expect.stringContaining('handler exploded'),
+      );
+    } finally {
+      await close();
+    }
+  });
+
+  it('reports output that fails its own schema as an internal error instead of an SDK exception', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const tool = defineTool({
+      name: 'depot_test_bad_output',
+      title: 'Bad output',
+      description: 'x',
+      inputSchema: {},
+      outputSchema: { count: z.number() },
+      handler: () =>
+        Promise.resolve({ summary: 'fine', data: { count: 'not a number' } as unknown as { count: number } }),
+    });
+    const { client, close } = await connectTool(tool);
+
+    try {
+      const result = await client.callTool({ name: 'depot_test_bad_output', arguments: {} });
+      const text = Array.isArray(result.content)
+        ? result.content.map((part) => (part as { text?: string }).text ?? '').join('')
+        : '';
+
+      expect(result.isError).toBe(true);
+      expect(text).toContain('depot-mcp internal error in depot_test_bad_output');
+      expect(text).toContain('output failed its schema');
+    } finally {
+      await close();
+    }
   });
 });

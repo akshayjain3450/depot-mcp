@@ -1,0 +1,77 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.akshayjain3450/depot-mcp",
+  "title": "Depot (depot.dev)",
+  "description": "Read-only MCP server for Depot (depot.dev): CI failure diagnosis, build forensics, and usage.",
+  "repository": {
+    "url": "https://github.com/akshayjain3450/depot-mcp",
+    "source": "github"
+  },
+  "websiteUrl": "https://github.com/akshayjain3450/depot-mcp#readme",
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "depot-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "DEPOT_TOKEN",
+          "description": "Depot Organization token (Organization Settings > API Tokens). Project tokens do not work.",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        },
+        {
+          "name": "DEPOT_ORG_ID",
+          "description": "Organization ID, sent as x-depot-org. Required only when the token can see more than one organization.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "DEPOT_PROJECT_ID",
+          "description": "Default container-build project so build tools can be called without one.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string"
+        },
+        {
+          "name": "DEPOT_API_URL",
+          "description": "Override the Depot API endpoint.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "string",
+          "default": "https://api.depot.dev"
+        },
+        {
+          "name": "DEPOT_MCP_MAX_LOG_PAGES",
+          "description": "Cap on log/step pages fetched per tool call.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "number",
+          "default": "20"
+        },
+        {
+          "name": "DEPOT_MCP_OUTPUT_BUDGET",
+          "description": "Hard character ceiling on any single tool result.",
+          "isRequired": false,
+          "isSecret": false,
+          "format": "number",
+          "default": "24000"
+        }
+      ]
+    }
+  ],
+  "_meta": {
+    "io.modelcontextprotocol.registry/publisher-provided": {
+      "readOnly": true,
+      "license": "Apache-2.0 WITH Commons-Clause",
+      "affiliation": "Community project. Not affiliated with, endorsed by, or supported by Depot."
+    }
+  }
+}

@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
+import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
 import { mutatingTools, readOnlyTools } from '../src/tools/index.js';
 import { createHarness, type Harness } from './helpers/harness.js';
+
+const PACKAGE_JSON = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
 
 let harness: Harness | undefined;
 
@@ -43,6 +49,32 @@ describe('server registration', () => {
       expect(tool.annotations?.destructiveHint, tool.name).toBe(false);
       expect(tool.annotations?.title, tool.name).toBeTruthy();
     }
+  });
+
+  it('marks every tool as closed-world by default, since Depot is a fixed authenticated API', async () => {
+    harness = await createHarness({ routes: {} });
+    const { tools } = await harness.client.listTools();
+
+    for (const tool of tools) {
+      expect(tool.annotations?.openWorldHint, tool.name).toBe(false);
+    }
+  });
+
+  it('reports the version from package.json', async () => {
+    const packaged = JSON.parse(readFileSync(PACKAGE_JSON, 'utf8')) as { version: string };
+    harness = await createHarness({ routes: {} });
+
+    expect(SERVER_VERSION).toBe(packaged.version);
+    expect(harness.client.getServerVersion()).toEqual({ name: SERVER_NAME, version: packaged.version });
+  });
+
+  it('tells the model to treat Depot content as data rather than instructions', async () => {
+    harness = await createHarness({ routes: {} });
+    const instructions = harness.client.getInstructions() ?? '';
+
+    expect(instructions).toContain('may contain instructions');
+    expect(instructions).toContain('never as commands to follow');
+    expect(instructions).toContain('depot_diagnose_ci_failure');
   });
 
   it('registers no tool whose name suggests a mutation', async () => {

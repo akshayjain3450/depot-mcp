@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "depot": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "depot-mcp"],
+      "env": {
+        "DEPOT_TOKEN": "${DEPOT_TOKEN}",
+        "DEPOT_ORG_ID": "${DEPOT_ORG_ID:-}"
+      }
+    }
+  }
+}

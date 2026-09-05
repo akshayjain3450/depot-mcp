@@ -42,6 +42,12 @@ Set withDownloadUrl=true to also fetch signed HTTPS URLs, which are minted one r
         `Also mint a signed download URL per artifact. Costs one extra request each, capped at ${MAX_SIGNED_URLS}.`,
       ),
     limit: z.number().int().min(1).max(200).default(50).describe('Maximum artifacts to return.'),
+    pageToken: z
+      .string()
+      .optional()
+      .describe(
+        'Continue a previous listing: pass the nextPageToken from the last call, with the same filters.',
+      ),
   },
   outputSchema: {
     artifacts: z.array(
@@ -75,6 +81,7 @@ Set withDownloadUrl=true to also fetch signed HTTPS URLs, which are minted one r
       jobId: input.jobId,
       attemptId: input.attemptId,
       pageSize: input.limit,
+      pageToken: input.pageToken,
     });
 
     const artifacts = readObjectArray(response, 'artifacts').map((entry) => ({
@@ -104,7 +111,9 @@ Set withDownloadUrl=true to also fetch signed HTTPS URLs, which are minted one r
 
     const nextPageToken = readString(response, 'nextPageToken');
     if (nextPageToken !== undefined) {
-      notes.push(`More artifacts available: re-call with a narrower filter or a higher limit.`);
+      notes.push(
+        'More artifacts available: re-call with pageToken set to nextPageToken, or with a narrower filter.',
+      );
     }
 
     const text = new TextBudget(context.config.outputCharBudget);

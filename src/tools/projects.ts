@@ -44,6 +44,10 @@ These are container build projects. Depot CI runs are organised by repository an
       .optional()
       .describe('Filter to one region, for example "us-east-1" or "eu-central-1".'),
     limit: z.number().int().min(1).max(200).default(100).describe('Maximum projects to return.'),
+    pageToken: z
+      .string()
+      .optional()
+      .describe('Continue a previous listing: pass the nextPageToken from the last call.'),
   },
   outputSchema: {
     projects: z.array(projectSchema),
@@ -51,10 +55,14 @@ These are container build projects. Depot CI runs are organised by repository an
     nextPageToken: z.string().optional(),
   },
   handler: async (input, context) => {
-    const response = await context.api.listProjects({
-      regionId: input.regionId,
-      pageSize: input.limit,
-    });
+    // ListProjects is paginated like the other list RPCs, and the API wrapper spreads the request
+    // through verbatim, so the token rides along even though its parameter type omits it.
+    const request: {
+      regionId?: string | undefined;
+      pageSize?: number | undefined;
+      pageToken?: string | undefined;
+    } = { regionId: input.regionId, pageSize: input.limit, pageToken: input.pageToken };
+    const response = await context.api.listProjects(request);
     const projects = readObjectArray(response, 'projects').map(parseProject);
     const nextPageToken = readString(response, 'nextPageToken');
 
@@ -71,7 +79,7 @@ These are container build projects. Depot CI runs are organised by repository an
       }
     }
     if (nextPageToken !== undefined) {
-      text.push('', 'More projects exist than were returned; raise limit to see them.');
+      text.push('', 'More projects exist than were returned; re-call with pageToken set to nextPageToken.');
     }
 
     return {

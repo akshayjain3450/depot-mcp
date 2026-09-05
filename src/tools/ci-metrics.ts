@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { DepotApiError } from '../depot/errors.js';
 import { readNumber, readString, type JsonObject } from '../depot/shape.js';
 import { truncateText } from '../lib/budget.js';
+import { isWrongTargetError } from '../lib/ci-target.js';
 import { inferTargetType, type CiTargetType } from '../lib/resolve.js';
 import { defineTool, ToolInputError, type ToolContext } from '../lib/tool.js';
 
@@ -104,10 +104,7 @@ Depot does not publish field names for these responses, so this tool returns the
         resolved = level;
         break;
       } catch (error) {
-        const wrongLevel =
-          error instanceof DepotApiError &&
-          (error.code === 'not_found' || error.code === 'invalid_argument');
-        if (!wrongLevel) {
+        if (!isWrongTargetError(error)) {
           throw error;
         }
       }
@@ -127,7 +124,12 @@ Depot does not publish field names for these responses, so this tool returns the
         ? metrics.peakMemoryBytes / metrics.memoryLimitBytes >= 0.95
         : undefined;
 
-    const raw = truncateText(JSON.stringify(response, null, 2), RAW_JSON_CHAR_LIMIT);
+    // Leave room for the header lines and the truncation footer inside the configured budget.
+    const rawLimit = Math.max(
+      200,
+      Math.min(RAW_JSON_CHAR_LIMIT, context.config.outputCharBudget - 1_200),
+    );
+    const raw = truncateText(JSON.stringify(response, null, 2), rawLimit);
     const lines = [`Depot CI metrics for ${resolved} ${input.id}.`];
     if (metrics.peakMemoryBytes !== undefined) {
       lines.push(`Peak memory: ${metrics.peakMemoryBytes} bytes.`);

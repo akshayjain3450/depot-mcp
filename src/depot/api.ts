@@ -72,7 +72,13 @@ export class DepotApi {
     return this.client.call(rpc(CORE_ORGANIZATION, 'ListOrganizations'), {});
   }
 
-  listProjects(request: { regionId?: string | undefined; pageSize?: number | undefined } = {}) {
+  listProjects(
+    request: {
+      regionId?: string | undefined;
+      pageSize?: number | undefined;
+      pageToken?: string | undefined;
+    } = {},
+  ): Promise<JsonObject> {
     return this.client.call(rpc(CORE_PROJECT, 'ListProjects'), { ...request });
   }
 

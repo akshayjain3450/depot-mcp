@@ -1,0 +1,91 @@
+{
+  "$schema": "https://raw.githubusercontent.com/modelcontextprotocol/mcpb/main/dist/manifest.schema.json",
+  "manifest_version": "0.3",
+  "name": "depot-mcp",
+  "display_name": "Depot (depot.dev)",
+  "version": "0.1.0",
+  "description": "Read-only access to Depot CI failure diagnosis, container build forensics, registry, and usage.",
+  "long_description": "Read-only Model Context Protocol server for Depot, the container build and CI acceleration service at depot.dev. Answers \"why did CI fail?\" and \"why did this build fail?\" using Depot's own failure diagnosis, plus run history, cache effectiveness, registry contents, CI configuration, and usage. No tool can change anything in Depot. Community project, not affiliated with Depot.",
+  "author": {
+    "name": "Akshay Jain",
+    "url": "https://github.com/akshayjain3450"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/akshayjain3450/depot-mcp"
+  },
+  "homepage": "https://github.com/akshayjain3450/depot-mcp#readme",
+  "documentation": "https://github.com/akshayjain3450/depot-mcp#readme",
+  "support": "https://github.com/akshayjain3450/depot-mcp/issues",
+  "license": "SEE LICENSE IN LICENSE",
+  "keywords": ["depot", "depot.dev", "ci", "docker", "buildkit", "container", "build", "read-only"],
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/dist/index.js"],
+      "env": {
+        "DEPOT_TOKEN": "${user_config.depot_token}",
+        "DEPOT_ORG_ID": "${user_config.depot_org_id}",
+        "DEPOT_PROJECT_ID": "${user_config.depot_project_id}"
+      }
+    }
+  },
+  "user_config": {
+    "depot_token": {
+      "type": "string",
+      "title": "Depot Organization token",
+      "description": "Create one in the Depot dashboard under Organization Settings > API Tokens. Project tokens do not work. This token can also write to Depot; the server never uses it to do so.",
+      "sensitive": true,
+      "required": true
+    },
+    "depot_org_id": {
+      "type": "string",
+      "title": "Organization ID (optional)",
+      "description": "Only needed if the token can see more than one organization. depot_whoami will tell you.",
+      "sensitive": false,
+      "required": false,
+      "default": ""
+    },
+    "depot_project_id": {
+      "type": "string",
+      "title": "Default project ID (optional)",
+      "description": "Default container-build project, so build tools can be called without naming one.",
+      "sensitive": false,
+      "required": false,
+      "default": ""
+    }
+  },
+  "tools": [
+    { "name": "depot_diagnose_ci_failure", "description": "Why did this CI run, workflow, job, or attempt fail? Clustered root causes, diagnosis, suggested fix, evidence lines." },
+    { "name": "depot_diagnose_build", "description": "Why did this container build fail? Failing step, its error and log tail, cache effectiveness." },
+    { "name": "depot_whoami", "description": "Is the token valid and what can it see? Detects multi-organization ambiguity." },
+    { "name": "depot_list_ci_runs", "description": "Recent CI runs filtered by status, repo, SHA, trigger, or PR." },
+    { "name": "depot_get_ci_run", "description": "One run's workflow, job, and attempt tree with statuses." },
+    { "name": "depot_get_ci_logs", "description": "Bounded raw logs for an attempt: tail by default, grep, step and stream filters." },
+    { "name": "depot_get_ci_job_summary", "description": "The markdown a job published about itself." },
+    { "name": "depot_get_ci_metrics", "description": "CPU and memory for a run, job, or attempt." },
+    { "name": "depot_list_ci_artifacts", "description": "Artifacts a run uploaded, with optional signed download URLs." },
+    { "name": "depot_list_builds", "description": "Recent container builds with duration and cache hit ratio." },
+    { "name": "depot_list_projects", "description": "Build projects with region, hardware, and cache policy." },
+    { "name": "depot_get_project", "description": "One project's configuration and OIDC trust policies." },
+    { "name": "depot_get_usage", "description": "Build minutes, minutes saved by cache, runner minutes, storage, sandboxes." },
+    { "name": "depot_list_images", "description": "Registry contents for a project with digests and sizes." },
+    { "name": "depot_list_ci_secrets", "description": "CI secret names and scoping. Values are never returned." },
+    { "name": "depot_list_ci_variables", "description": "CI variables with values and scoping; credential-shaped values are redacted." }
+  ],
+  "prompts": [
+    { "name": "diagnose-latest-failure", "description": "Find the most recent failed run, diagnose it, and propose a fix.", "text": "Find my most recent failed Depot CI run, diagnose why it failed, and propose a fix." },
+    { "name": "explain-build-slowness", "description": "Look at recent builds and usage to explain whether slowness is cache misses or more work.", "text": "Look at my recent Depot container builds and usage and explain whether they are slow because of cache misses or because there is more work." }
+  ],
+  "tools_generated": false,
+  "prompts_generated": false,
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  }
+}

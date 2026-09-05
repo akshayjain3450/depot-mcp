@@ -9,12 +9,23 @@ import {
   type JsonObject,
 } from '../depot/shape.js';
 import { truncateText } from './budget.js';
+import { STATUS_PREFIXES } from './ci-tree.js';
 
 /** Depot's CLI appends this whenever a diagnosis or suggested fix is present; keep it verbatim. */
 export const AI_DISCLOSURE = 'This diagnosis is AI-generated and can make mistakes.';
 
 const EVIDENCE_LINE_CHAR_LIMIT = 400;
 const ERROR_MESSAGE_CHAR_LIMIT = 1_200;
+/** Diagnoses and fixes are AI prose built from log content; cap them like the error message. */
+const DIAGNOSIS_CHAR_LIMIT = 2_000;
+const POSSIBLE_FIX_CHAR_LIMIT = 2_000;
+/** Labels on nextCommands and overLimitBreakdown carry job and workflow names from the repo. */
+const LABEL_CHAR_LIMIT = 200;
+
+
+function capString(value: string | undefined, limit: number): string | undefined {
+  return value === undefined ? undefined : truncateText(value, limit).text;
+}
 
 export interface EvidenceLine {
   stepId: string | undefined;
@@ -145,7 +156,7 @@ function parseNextStep(source: JsonObject): NextStep | undefined {
   const mapping = NEXT_COMMAND_TOOLS[kind];
   return {
     kind,
-    label: readString(source, 'label'),
+    label: capString(readString(source, 'label'), LABEL_CHAR_LIMIT),
     tool: mapping?.tool,
     arguments: mapping !== undefined && targetId !== undefined ? mapping.args(targetId) : {},
   };
@@ -191,12 +202,9 @@ function parseAttempt(source: JsonObject, limits: DiagnosisLimits): AttemptRef {
     attempt: readNumber(source, 'attempt'),
     attemptStatus: readEnum(source, ['attemptStatus'], ['status', 'attempt_status']),
     attemptConclusion: readEnum(source, ['attemptConclusion'], ['conclusion', 'attempt_conclusion']),
-    errorMessage:
-      errorMessage === undefined
-        ? undefined
-        : truncateText(errorMessage, ERROR_MESSAGE_CHAR_LIMIT).text,
-    diagnosis: readString(source, 'diagnosis'),
-    possibleFix: readString(source, 'possibleFix'),
+    errorMessage: capString(errorMessage, ERROR_MESSAGE_CHAR_LIMIT),
+    diagnosis: capString(readString(source, 'diagnosis'), DIAGNOSIS_CHAR_LIMIT),
+    possibleFix: capString(readString(source, 'possibleFix'), POSSIBLE_FIX_CHAR_LIMIT),
     evidence: evidence.lines,
     evidenceOmitted: evidence.omitted,
   };
@@ -213,8 +221,8 @@ function parseFailureGroup(source: JsonObject, limits: DiagnosisLimits): Failure
     errorMessage: capped?.text,
     errorMessageTruncated:
       (capped?.truncated ?? false) || (readBoolean(source, 'errorMessageTruncated') ?? false),
-    diagnosis: readString(source, 'diagnosis'),
-    possibleFix: readString(source, 'possibleFix'),
+    diagnosis: capString(readString(source, 'diagnosis'), DIAGNOSIS_CHAR_LIMIT),
+    possibleFix: capString(readString(source, 'possibleFix'), POSSIBLE_FIX_CHAR_LIMIT),
     attempts: readObjectArray(source, 'representatives').map((entry) =>
       parseAttempt(entry, limits),
     ),
@@ -310,8 +318,8 @@ export function parseDiagnosis(response: JsonObject, limits: DiagnosisLimits): D
     (entry) => ({
       targetType: readEnum(entry, ['targetType'], ['target_type']),
       targetId: readString(entry, 'targetId'),
-      label: readString(entry, 'label'),
-      status: readEnum(entry, ['status'], ['status']),
+      label: capString(readString(entry, 'label'), LABEL_CHAR_LIMIT),
+      status: readEnum(entry, ['status'], STATUS_PREFIXES),
       failedJobCount: readNumber(entry, 'failedProblemCandidateCount'),
       nextStep: parseNextSteps(entry, 'nextCommands')[0],
     }),
@@ -323,7 +331,7 @@ export function parseDiagnosis(response: JsonObject, limits: DiagnosisLimits): D
     target: {
       targetId: readString(target, 'targetId'),
       targetType: readEnum(target, ['targetType'], ['target_type']),
-      status: readEnum(target, ['status'], ['status']),
+      status: readEnum(target, ['status'], STATUS_PREFIXES),
     },
     context: parseContext(readObject(response, 'context')),
     failureGroups: groups,

@@ -1,11 +1,24 @@
 import { z } from 'zod';
 import { readNumber, readObjectArray, readString } from '../depot/shape.js';
 import { TextBudget } from '../lib/budget.js';
-import { daysAgoRfc3339, toRfc3339 } from '../lib/time.js';
+import { daysAgoRfc3339, toRfc3339, toRfc3339WindowEnd } from '../lib/time.js';
 import { defineTool, ToolInputError } from '../lib/tool.js';
 
 const REPO_LIMIT = 20;
 const JOBS_PER_REPO_LIMIT = 10;
+
+function parseWindowBoundary(
+  field: 'startAt' | 'endAt',
+  value: string,
+  convert: (value: string) => string,
+): string {
+  try {
+    return convert(value);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    throw new ToolInputError(`${field}: ${reason}`);
+  }
+}
 
 const usageRowSchema = z.object({
   label: z.string(),
@@ -35,8 +48,15 @@ Pass projectId to scope to one container build project, which returns build coun
     startAt: z
       .string()
       .optional()
-      .describe('Start of the window, RFC 3339 or YYYY-MM-DD. Requires endAt.'),
-    endAt: z.string().optional().describe('End of the window, RFC 3339 or YYYY-MM-DD.'),
+      .describe(
+        'Start of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC; a date-only value means midnight at the start of that day. Requires endAt.',
+      ),
+    endAt: z
+      .string()
+      .optional()
+      .describe(
+        'End of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC. A date-only value is inclusive: "2024-01-31" covers all of 31 January. Requires startAt.',
+      ),
     projectId: z
       .string()
       .optional()
@@ -88,14 +108,14 @@ Pass projectId to scope to one container build project, which returns build coun
       );
     }
 
-    let startAt: string;
-    let endAt: string;
-    try {
-      startAt = input.startAt === undefined ? daysAgoRfc3339(input.days) : toRfc3339(input.startAt);
-      endAt = input.endAt === undefined ? new Date().toISOString() : toRfc3339(input.endAt);
-    } catch (error) {
-      throw new ToolInputError(error instanceof Error ? error.message : String(error));
-    }
+    const startAt =
+      input.startAt === undefined
+        ? daysAgoRfc3339(input.days)
+        : parseWindowBoundary('startAt', input.startAt, toRfc3339);
+    const endAt =
+      input.endAt === undefined
+        ? new Date().toISOString()
+        : parseWindowBoundary('endAt', input.endAt, toRfc3339WindowEnd);
 
     const notes: string[] = [];
     const text = new TextBudget(context.config.outputCharBudget);

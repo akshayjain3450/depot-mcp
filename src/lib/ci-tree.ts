@@ -8,7 +8,22 @@ import {
 } from '../depot/shape.js';
 import { durationSecondsBetween } from './time.js';
 
-const STATUS_PREFIXES = ['status', 'run_status', 'job_status', 'attempt_status', 'conclusion'];
+/**
+ * Depot's status enums arrive as RUN_STATUS_FAILED, JOB_CONCLUSION_FAILURE, and so on. Every
+ * reader strips the same prefixes so a status reads as "failed", never "run_status_failed".
+ */
+export const STATUS_PREFIXES = [
+  'status',
+  'run_status',
+  'workflow_status',
+  'job_status',
+  'attempt_status',
+  'conclusion',
+  'run_conclusion',
+  'workflow_conclusion',
+  'job_conclusion',
+  'attempt_conclusion',
+];
 
 export interface AttemptNode {
   attemptId: string | undefined;

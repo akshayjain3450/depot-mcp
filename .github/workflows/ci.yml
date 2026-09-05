@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check distribution metadata
+        run: node .github/scripts/check-metadata.mjs
+
+      - name: Pack (dry run)
+        run: npm pack --dry-run
+
+      - name: MCP stdio smoke
+        run: node .github/scripts/mcp-smoke.mjs dist/index.js
+
+  docker:
+    name: Docker image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: depot-mcp:ci
+
+      - name: Image starts and refuses to run without a token
+        run: |
+          set +e
+          docker run --rm depot-mcp:ci
+          status=$?
+          set -e
+          if [ "$status" -ne 78 ]; then
+            echo "expected exit 78 (EX_CONFIG) without DEPOT_TOKEN, got $status"
+            exit 1
+          fi
