@@ -13,7 +13,7 @@ const PROJECT_PREVIEW_LIMIT = 25;
  * does not say so, and the generic 401 guidance ("check the token") sends people the wrong way.
  */
 export const USER_TOKEN_WARNING =
-  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build, depot_list_images and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). The CI tools keep working.';
+  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). Being an organization owner does not change this. The CI tools, depot_list_images and depot_list_ci_secrets/variables keep working.';
 
 /**
  * The mirror image, also observed live on 2026-09-06: an Organization token reaches every core and

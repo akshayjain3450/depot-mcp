@@ -74,10 +74,10 @@ Which token you have decides which tools work. Verified live against Depot on 20
 | Token | `depot_whoami`, CI tools | Project, build, registry, usage tools | How to get it |
 | --- | --- | --- | --- |
 | Organization token (recommended) | yes | yes | Organization Settings, API Tokens (requires an organization admin) |
-| User token | yes | **no**: Depot answers `401 Invalid token` | Account settings, API Tokens, or `depot login` |
+| User token | yes (plus `depot_list_images`) | **no**: Depot answers `401 Invalid token`, even for an organization owner | Account settings, API Tokens, or `depot login` |
 | Project token | no | no | not usable here |
 
-One quirk of Organization tokens: Depot's `ListOrganizations` RPC answers `401 Invalid token` for them, because they are not tied to a user. `depot_whoami` knows this, reports the token kind, and reads the organization id from the projects instead. Depot's published scope matrix lists user tokens as valid for the API; in practice the core Project, Build and Usage services reject them.
+One quirk of Organization tokens: Depot's `ListOrganizations` RPC answers `401 Invalid token` for them, because they are not tied to a user. `depot_whoami` knows this, reports the token kind, and reads the organization id from the projects instead. Depot's published scope matrix lists user tokens as valid for the API; in practice the `depot.core.v1` Project, Build, Usage and trust-policy services reject them regardless of the user's role (verified with an owner's token on 2026-09-06), while `depot.build.v1` (registry images, build steps) and the whole CI API accept them. CI secrets and variables need at least an admin role with a user token.
 
 Create a dedicated token for this server so you can revoke it independently. Depot has no read-only token scope; read [the security section](#read-only-model-and-security) before you paste one anywhere.
 

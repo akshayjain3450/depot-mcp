@@ -92,6 +92,8 @@ From [docs/cli/authentication](https://depot.dev/docs/cli/authentication) — th
 - **Project token** — scoped to one project. Cannot use Depot CI, Cache, Agents, or the API. Created in project Settings → Project Tokens.
 - **Pull token** — short-lived (**1 hour**), read-only, Registry-only. Generated with `depot pull-token --project <id>`. Not listed or revocable in the dashboard.
 
+**Live findings, 2026-09-06 (user vs. Organization token, same organization, user is owner).** `depot.core.v1` `ProjectService`, `BuildService`, `UsageService` and `ListTrustPolicies` answer a user token with 401 `Invalid token` regardless of role; `OrganizationService/ListOrganizations` answers an Organization token with the same 401. Both kinds are accepted by `depot.build.v1` (`ListImages`, `GetBuildSteps`), the whole `depot.ci.v1` API, and `depot.ci.v3beta2` secrets/variables (a member-role user token got 403 there; an owner's got 200). So the public API needs an Organization token for anything project-, build- or usage-shaped, and there is no single token that can call every service.
+
 There are **no granular scopes**. A token is not "read-only" — an org token that can call `ListRuns` can also call `CancelRun` and `DeleteProject`. Least privilege must be enforced by the MCP server, not by Depot.
 
 ### Wire format
