@@ -1,11 +1,19 @@
 import { z } from 'zod';
-import { formatDepotError } from '../depot/errors.js';
+import { DepotApiError, formatDepotError } from '../depot/errors.js';
 import { readObjectArray, readString } from '../depot/shape.js';
 import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
 
 const PROJECT_PREVIEW_LIMIT = 25;
+
+/**
+ * Observed live on 2026-09-06: a user token lists organizations and reaches the CI API, but
+ * depot.core.v1 Project/Build/Usage RPCs answer 401 "Invalid token" to it. Depot's scope matrix
+ * does not say so, and the generic 401 guidance ("check the token") sends people the wrong way.
+ */
+export const USER_TOKEN_WARNING =
+  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build, depot_list_images and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). The CI tools keep working.';
 
 export const whoamiTool = defineTool({
   name: 'depot_whoami',
@@ -93,6 +101,17 @@ Never returns the token or any part of it.`,
         .filter((orgId): orgId is string => orgId !== undefined);
       warnings.push(
         `DEPOT_ORG_ID is set to "${configuredOrgId}", but this token cannot see that organization. Requests scoped to it will fail or return nothing. Visible organization ids: ${visible.length === 0 ? 'none reported' : visible.join(', ')}.`,
+      );
+    }
+
+    if (
+      orgResult.status === 'fulfilled' &&
+      projectResult.status === 'rejected' &&
+      projectResult.reason instanceof DepotApiError &&
+      projectResult.reason.code === 'unauthenticated'
+    ) {
+      warnings.push(
+        USER_TOKEN_WARNING,
       );
     }
 

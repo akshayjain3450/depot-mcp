@@ -79,6 +79,35 @@ describe('depot_whoami', () => {
     expect(harness.callsTo(RPC.listOrganizations)[0]?.headers['x-depot-org']).toBe('org_9z8y7x');
   });
 
+  it('explains a user token when organizations list but projects answer 401', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: connectError(401, 'unauthenticated', 'Invalid token'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    const warnings = Array.isArray(result.structured.warnings) ? result.structured.warnings : [];
+
+    expect(result.isError).toBe(false);
+    expect(warnings.some((w) => String(w).includes('user token'))).toBe(true);
+    expect(result.text).toContain('Organization Settings -> API Tokens');
+    expect(result.text).toContain('CI tools keep working');
+  });
+
+  it('does not call a 403 on projects a user-token problem', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: connectError(403, 'permission_denied', 'nope'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+    expect(result.text).not.toContain('accept only Organization tokens');
+  });
+
   it('still reports what worked when one check fails', async () => {
     harness = await createHarness({
       routes: {
