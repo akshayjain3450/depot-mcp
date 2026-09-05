@@ -34,7 +34,7 @@ Organization Settings -> API Tokens, then pass it to the server through your MCP
       "depot": {
         "command": "npx",
         "args": ["-y", "depot-mcp"],
-        "env": { "DEPOT_TOKEN": "dp_..." }
+        "env": { "DEPOT_TOKEN": "YOUR_DEPOT_TOKEN" }
       }
     }
   }

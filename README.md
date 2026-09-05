@@ -69,6 +69,16 @@ As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise
 - **A Depot Organization token.** Depot dashboard, Organization Settings, API Tokens. A user token from `depot login` also works but spans every organization you belong to, so set `DEPOT_ORG_ID` too.
 - **Project tokens will not work.** Depot's own scope matrix excludes them from Depot CI and the API entirely.
 
+Which token you have decides which tools work. Verified live against Depot on 2026-09-06:
+
+| Token | `depot_whoami`, CI tools | Project, build, registry, usage tools | How to get it |
+| --- | --- | --- | --- |
+| Organization token | yes | yes | Organization Settings, API Tokens (requires an organization admin) |
+| User token | yes | **no**: Depot answers `401 Invalid token` | Account settings, API Tokens, or `depot login` |
+| Project token | no | no | not usable here |
+
+`depot_whoami` detects the user-token case and says which tools are affected. Depot's published scope matrix lists user tokens as valid for the API; in practice the core Project, Build and Usage services reject them.
+
 Create a dedicated token for this server so you can revoke it independently. Depot has no read-only token scope; read [the security section](#read-only-model-and-security) before you paste one anywhere.
 
 ## Installation
@@ -84,7 +94,7 @@ The generic config, which works as-is in Claude Desktop, Cursor, Windsurf, Cline
       "command": "npx",
       "args": ["-y", "depot-mcp"],
       "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
+        "DEPOT_TOKEN": "YOUR_DEPOT_TOKEN"
       }
     }
   }
@@ -96,7 +106,7 @@ Add `"DEPOT_ORG_ID": "..."` to `env` if your token can see more than one organiz
 ### Claude Code
 
 ```bash
-claude mcp add depot --scope user --env DEPOT_TOKEN=dp_your_organization_token -- npx -y depot-mcp
+claude mcp add depot --scope user --env DEPOT_TOKEN=YOUR_DEPOT_TOKEN -- npx -y depot-mcp
 ```
 
 Or commit a `.mcp.json` at the repository root so the whole team gets it. Claude Code expands `${VAR}` and `${VAR:-default}` in `command`, `args`, `env`, `url`, and `headers`, so the token stays in each developer's shell environment and out of git. Copy [`.mcp.json.example`](./.mcp.json.example):
@@ -149,8 +159,8 @@ The button pre-fills the server; fill in `DEPOT_TOKEN` when Cursor shows the con
 
 ### VS Code and GitHub Copilot
 
-[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_depot--mcp-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2520(dp_...)%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
-[![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_depot--mcp-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2520(dp_...)%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_depot--mcp-0098FF?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
+[![Install in VS Code Insiders](https://img.shields.io/badge/VS_Code_Insiders-Install_depot--mcp-24bfa5?style=flat-square&logo=visualstudiocode&logoColor=white)](https://insiders.vscode.dev/redirect?url=vscode-insiders%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522depot%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522depot-mcp%2522%255D%252C%2522env%2522%253A%257B%2522DEPOT_TOKEN%2522%253A%2522%2524%257Binput%253Adepot-token%257D%2522%257D%252C%2522inputs%2522%253A%255B%257B%2522type%2522%253A%2522promptString%2522%252C%2522id%2522%253A%2522depot-token%2522%252C%2522description%2522%253A%2522Depot%2520Organization%2520token%2522%252C%2522password%2522%253Atrue%257D%255D%257D)
 
 The buttons register the server and prompt for the token once, storing it as a VS Code secret. Equivalent `.vscode/mcp.json` (safe to commit: the token is an input, not a value):
 
@@ -160,7 +170,7 @@ The buttons register the server and prompt for the token once, storing it as a V
     {
       "type": "promptString",
       "id": "depot-token",
-      "description": "Depot Organization token (dp_...)",
+      "description": "Depot Organization token",
       "password": true
     }
   ],
@@ -177,7 +187,7 @@ The buttons register the server and prompt for the token once, storing it as a V
 }
 ```
 
-Or from a terminal: `code --add-mcp '{"name":"depot","command":"npx","args":["-y","depot-mcp"],"env":{"DEPOT_TOKEN":"dp_..."}}'`. Copilot Chat in VS Code uses whatever is in `mcp.json`; use "MCP: Open User Configuration" for a user-level file.
+Or from a terminal: `code --add-mcp '{"name":"depot","command":"npx","args":["-y","depot-mcp"],"env":{"DEPOT_TOKEN":"YOUR_DEPOT_TOKEN"}}'`. Copilot Chat in VS Code uses whatever is in `mcp.json`; use "MCP: Open User Configuration" for a user-level file.
 
 ### GitHub Copilot coding agent
 
@@ -202,7 +212,7 @@ Repository Settings, Copilot, Coding agent, MCP configuration. Secrets must be C
 ### OpenAI Codex CLI
 
 ```bash
-codex mcp add depot --env DEPOT_TOKEN=dp_your_organization_token -- npx -y depot-mcp
+codex mcp add depot --env DEPOT_TOKEN=YOUR_DEPOT_TOKEN -- npx -y depot-mcp
 ```
 
 Or in `~/.codex/config.toml`. `env_vars` forwards named variables from your shell so the token need not be written into the file:
@@ -217,7 +227,7 @@ env_vars = ["DEPOT_TOKEN", "DEPOT_ORG_ID"]
 ### Gemini CLI
 
 ```bash
-gemini mcp add -e DEPOT_TOKEN=dp_your_organization_token depot npx -y depot-mcp
+gemini mcp add -e DEPOT_TOKEN=YOUR_DEPOT_TOKEN depot npx -y depot-mcp
 ```
 
 Or in `~/.gemini/settings.json`. Gemini CLI expands `$VAR` and `${VAR}` inside `env`:
@@ -251,7 +261,7 @@ Or in `~/.gemini/settings.json`. Gemini CLI expands `$VAR` and `${VAR}` inside `
       "command": "npx",
       "args": ["-y", "depot-mcp"],
       "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
+        "DEPOT_TOKEN": "YOUR_DEPOT_TOKEN"
       }
     }
   }
@@ -272,7 +282,7 @@ No Node.js on the host. The image is stdio, so `-i` is required and `-t` must no
 
 ```bash
 docker build -t depot-mcp .
-export DEPOT_TOKEN=dp_your_organization_token
+export DEPOT_TOKEN=YOUR_DEPOT_TOKEN
 docker run -i --rm -e DEPOT_TOKEN -e DEPOT_ORG_ID depot-mcp
 ```
 
@@ -285,7 +295,7 @@ Client config for the image:
       "command": "docker",
       "args": ["run", "-i", "--rm", "-e", "DEPOT_TOKEN", "depot-mcp"],
       "env": {
-        "DEPOT_TOKEN": "dp_your_organization_token"
+        "DEPOT_TOKEN": "YOUR_DEPOT_TOKEN"
       }
     }
   }
@@ -308,7 +318,7 @@ npm run build
 Then replace `"command": "npx", "args": ["-y", "depot-mcp"]` in any block above with `"command": "node", "args": ["/absolute/path/to/depot-mcp/dist/index.js"]`. For Claude Code:
 
 ```bash
-claude mcp add depot --env DEPOT_TOKEN=dp_your_organization_token -- node /absolute/path/to/depot-mcp/dist/index.js
+claude mcp add depot --env DEPOT_TOKEN=YOUR_DEPOT_TOKEN -- node /absolute/path/to/depot-mcp/dist/index.js
 ```
 
 ### Checking it works
@@ -446,7 +456,7 @@ Every tool caps its own output and tells the agent when it truncated:
 - **Create a dedicated Organization token for this server** so you can revoke it independently.
 - **stdio only, no listening port.** The token crosses no network boundary other than TLS to `api.depot.dev`.
 - **CI logs are untrusted text.** Log lines, step summaries, artifact names, variable values, and Depot's AI diagnoses are derived from repository content, so anyone who can push to a repository that runs on Depot CI can put words in them. This server returns them; it does not act on them. Your agent might. Summaries fence that text between `--- begin untrusted CI content ---` and `--- end untrusted CI content ---`, label Depot's diagnosis and suggested fix as unverified, and carry a `contentWarning` field in structured output. The server instructions tell the model to treat it as data, never as commands.
-- Depot stores CLI credentials in plaintext at `~/.config/depot/depot.yaml` (mode 0600), not the OS keychain. Relevant if you copy a token from there.
+- Depot stores CLI credentials in plaintext (mode 0600), not the OS keychain: `~/Library/Application Support/depot/depot.yaml` on macOS, `~/.config/depot/depot.yaml` on Linux. Relevant if you copy a token from there. Note that the CLI prefers that stored login over `DEPOT_TOKEN`, so the CLI and this server can be looking at different organizations.
 
 How clients treat the annotations differs: Claude Desktop uses `readOnlyHint` for auto-approval, Claude Code prompts on every call unless the tool is allowlisted, and Cursor uses its own run modes. Report security problems as described in [SECURITY.md](./SECURITY.md).
 
@@ -511,7 +521,7 @@ Tests drive a real `Client` against a real `McpServer` over the SDK's `InMemoryT
 ### Live check against your own Depot organization
 
 ```bash
-DEPOT_TOKEN=dp_your_organization_token npm run smoke
+DEPOT_TOKEN=YOUR_DEPOT_TOKEN npm run smoke
 ```
 
 This runs read-only calls only, prints what it found, and reports which checks passed, failed, or were skipped. It skips the failure-diagnosis check if your organization has no failed run to analyse; without one, the flagship tool cannot be exercised.

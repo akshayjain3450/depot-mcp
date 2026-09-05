@@ -234,7 +234,7 @@ function mapDefined<T, U>(value: T | undefined, fn: (value: T) => U): U | undefi
 
 const CODE_GUIDANCE: Readonly<Record<ConnectErrorCode, string>> = {
   unauthenticated:
-    'Depot rejected the credential. Check that DEPOT_TOKEN is set to a current, unrevoked Depot API token — an Organization token from Organization Settings -> API Tokens, or a user token from `depot login`. Project tokens cannot reach the CI API or the Depot API at all.',
+    'Depot rejected the credential. Check that DEPOT_TOKEN is set to a current, unrevoked Depot API token. If depot_whoami can list organizations but this call says "Invalid token", the token is a user token: Depot\'s core Project, Build, Registry and Usage services accept only Organization tokens (Organization Settings -> API Tokens), while the CI API accepts both. Project tokens cannot reach the CI API or the Depot API at all.',
   permission_denied:
     'The token is valid but is not allowed to see this resource. If it is a user token spanning several organizations, set DEPOT_ORG_ID to the organization that owns this resource. If it is a project token, it cannot reach the CI API — use an Organization token.',
   not_found:

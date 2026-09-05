@@ -9,13 +9,14 @@
 import { ConfigError, loadConfig } from '../src/config.js';
 import { DepotApi } from '../src/depot/api.js';
 import { DepotClient } from '../src/depot/client.js';
-import { formatDepotError } from '../src/depot/errors.js';
+import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
 import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
 import { parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
 import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
 import { parseProject } from '../src/lib/project.js';
 import { daysAgoRfc3339 } from '../src/lib/time.js';
+import { USER_TOKEN_WARNING } from '../src/tools/whoami.js';
 
 type Status = 'ok' | 'failed' | 'skipped';
 
@@ -85,9 +86,16 @@ async function main(): Promise<void> {
   console.log('');
   console.log('Container builds');
   await attempt('ListProjects', async () => {
-    const projects = readObjectArray(await api.listProjects({ pageSize: 100 }), 'projects').map(
-      parseProject,
-    );
+    let response: JsonObject;
+    try {
+      response = await api.listProjects({ pageSize: 100 });
+    } catch (error) {
+      if (error instanceof DepotApiError && error.code === 'unauthenticated') {
+        console.log(`         ! ${USER_TOKEN_WARNING}`);
+      }
+      throw error;
+    }
+    const projects = readObjectArray(response, 'projects').map(parseProject);
     for (const project of projects.slice(0, 10)) {
       console.log(
         `         - ${project.projectId ?? '?'} ${project.name ?? ''} (${project.regionId ?? '?'}, hardware ${project.hardware ?? '?'})`,

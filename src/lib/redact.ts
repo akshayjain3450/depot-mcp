@@ -279,6 +279,7 @@ const CREDENTIAL_PATTERNS: readonly RegExp[] = [
   /\bhv[sbr]\.[A-Za-z0-9_-]{20,}/, // HashiCorp Vault
   /\bdp_[A-Za-z0-9]{16,}/, // Depot
   /\bdepot_(?:org|project|user|pull)_[A-Za-z0-9]{16,}/, // Depot (typed tokens)
+  /\bdepot_[A-Za-z0-9]{40,}/, // Depot (observed live: depot_ + 64 alphanumerics)
   /\bsntrys_[A-Za-z0-9+/=_-]{20,}/, // Sentry organization tokens
   /:\/\/[A-Za-z0-9]{16,128}(?::[A-Za-z0-9]{1,128})?@[A-Za-z0-9.-]{0,128}sentry\.io\b/, // Sentry DSN
   /\beyJ[A-Za-z0-9_-]{8,512}\.[A-Za-z0-9_-]{8,}/, // JWT
