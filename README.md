@@ -4,7 +4,7 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 
 [![CI](https://github.com/akshayjain3450/depot-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/akshayjain3450/depot-mcp/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/depot-mcp?logo=npm&label=npm)](https://www.npmjs.com/package/depot-mcp)
-[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.GITHUB__OWNER%2Fdepot--mcp-lightgrey)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.akshayjain3450/depot-mcp)
+[![MCP Registry](https://img.shields.io/badge/MCP_Registry-io.github.akshayjain3450%2Fdepot--mcp-lightgrey)](https://registry.modelcontextprotocol.io/v0/servers?search=io.github.akshayjain3450/depot-mcp)
 [![License](https://img.shields.io/badge/license-Apache--2.0_with_Commons_Clause-blue)](./LICENSE)
 [![Node](https://img.shields.io/badge/node-%3E%3D20-brightgreen?logo=node.js&logoColor=white)](./.nvmrc)
 
