@@ -92,6 +92,8 @@ From [docs/cli/authentication](https://depot.dev/docs/cli/authentication) — th
 - **Project token** — scoped to one project. Cannot use Depot CI, Cache, Agents, or the API. Created in project Settings → Project Tokens.
 - **Pull token** — short-lived (**1 hour**), read-only, Registry-only. Generated with `depot pull-token --project <id>`. Not listed or revocable in the dashboard.
 
+**Live findings, 2026-09-06 (user vs. Organization token, same organization, user is owner).** `depot.core.v1` `ProjectService`, `BuildService`, `UsageService` and `ListTrustPolicies` answer a user token with 401 `Invalid token` regardless of role; `OrganizationService/ListOrganizations` answers an Organization token with the same 401. Both kinds are accepted by `depot.build.v1` (`ListImages`, `GetBuildSteps`), the whole `depot.ci.v1` API, and `depot.ci.v3beta2` secrets/variables (a member-role user token got 403 there; an owner's got 200). So the public API needs an Organization token for anything project-, build- or usage-shaped, and there is no single token that can call every service.
+
 There are **no granular scopes**. A token is not "read-only" — an org token that can call `ListRuns` can also call `CancelRun` and `DeleteProject`. Least privilege must be enforced by the MCP server, not by Depot.
 
 ### Wire format
@@ -216,7 +218,7 @@ The CLI's streaming client (`CIStreamJobAttemptLogLines`) is a useful reference 
 
 `POST /depot.ci.v1.CIService/GetFailureDiagnosis`
 
-Request: `{targetId, targetType}` where `targetType` ∈ `RUN | WORKFLOW | JOB | ATTEMPT`.
+Request: `{targetId, targetType}` where `targetType` is the enum **number**: `1` RUN, `2` WORKFLOW, `3` JOB, `4` ATTEMPT. Verified live 2026-09-06: every symbolic spelling (`RUN`, `TARGET_TYPE_RUN`, `run`) is rejected with 400 "target_type is required", and `5` gives "Unsupported target_type: 5". Depot's JSON codec here does not accept enum names, unlike `ListRuns.status`, which accepts only the lowercase strings `queued|running|finished|failed|cancelled`.
 
 This is a **server-side, bounded, AI-assisted failure analysis**. It is not a log dump. The response shape (reconstructed precisely from `pkg/cmd/ci/diagnose.go`, which serialises every field for `--output json`):
 
@@ -331,6 +333,8 @@ message BuildStep {
 }
 // GetBuildStepLogsResponse.Log = { message, timestamp }
 ```
+
+**Live findings, 2026-09-06.** The Connect JSON binding of `GetBuildSteps` fails server-side: for a successful build the server answers 500 `cannot encode field depot.build.v1.GetBuildStepsResponse.BuildStep.has_logs to JSON: expected boolean, got 0`, and for a failed build 500 `Error fetching build steps` (intermittently; the same build later returned 7 steps). The binary encoding (`content-type: application/proto`) works for both, so depot-mcp encodes these two RPCs by hand from `build.proto`. `GetBuildStepLogs` returned 500 `internal error` on both encodings for every step with `hasLogs: true` that was tried. Worth reporting to Depot.
 
 **`GetBuildSteps` + `GetBuildStepLogs` are the container-build analogue of CI's diagnose** — per-step cache state, per-step error, and `hasLogs` so you know which step to fetch logs for. There is no server-side AI diagnosis here; the wrapper has to do the "find the failing step, fetch its logs" work itself.
 

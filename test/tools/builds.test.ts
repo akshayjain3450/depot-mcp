@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, createHarness, fixture, ok, type Harness } from '../helpers/harness.js';
+import { callTool, connectError, createHarness, fixture, ok, type Harness } from '../helpers/harness.js';
 import { RPC } from '../helpers/rpcs.js';
 
 let harness: Harness | undefined;
@@ -225,5 +225,66 @@ describe('depot_list_builds', () => {
     expect(result.isError).toBe(true);
     expect(result.text).toContain('depot_list_projects');
     expect(result.text).toContain('DEPOT_PROJECT_ID');
+  });
+});
+
+describe('depot_diagnose_build when Depot cannot serve step data', () => {
+
+  it('still returns the build-level facts when GetBuildSteps fails server-side', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok(fixture('build')),
+        [RPC.getBuildSteps]: connectError(500, 'internal', 'Error fetching build steps'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_9e2c1a',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structured.stepsUnavailable).toBe(true);
+    expect(result.structured.stepCount).toBe(0);
+    expect(result.text).toContain('could not return the steps');
+    expect(result.text).toContain('Error fetching build steps');
+  });
+
+  it('keeps the failing step and its error when GetBuildStepLogs fails server-side', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok(fixture('build')),
+        [RPC.getBuildSteps]: ok(fixture('build-steps')),
+        [RPC.getBuildStepLogs]: connectError(500, 'internal', 'internal error'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_9e2c1a',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structured.logsUnavailable).toBe(true);
+    expect(result.structured.logTail).toEqual([]);
+    expect(result.text).toContain('Step to look at');
+    expect(result.text).toContain("could not return the step's logs");
+    expect(result.text).not.toContain('Depot reports no logs for this step');
+  });
+
+  it('does not swallow non-server-side errors from the step endpoints', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok(fixture('build')),
+        [RPC.getBuildSteps]: connectError(403, 'permission_denied', 'nope'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_9e2c1a',
+      projectId: 'proj_api7f2',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('permission_denied');
   });
 });

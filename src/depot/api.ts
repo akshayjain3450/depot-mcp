@@ -1,3 +1,9 @@
+import {
+  decodeGetBuildStepLogsResponse,
+  decodeGetBuildStepsResponse,
+  encodeGetBuildStepLogsRequest,
+  encodeGetBuildStepsRequest,
+} from './build-proto.js';
 import type { DepotClient } from './client.js';
 import type { RpcTarget } from './errors.js';
 import type { JsonObject } from './shape.js';
@@ -42,6 +48,26 @@ export interface ListArtifactsRequest {
 }
 
 export type DiagnosisTargetType = 'RUN' | 'WORKFLOW' | 'JOB' | 'ATTEMPT';
+
+/**
+ * Verified live on 2026-09-06: GetFailureDiagnosis accepts `targetType` only as the protobuf enum
+ * number. Every symbolic spelling (`RUN`, `TARGET_TYPE_RUN`, `run`, snake_case field name) is
+ * answered with 400 "target_type is required"; 5 gives "Unsupported target_type: 5".
+ */
+export const DIAGNOSIS_TARGET_TYPE_WIRE: Readonly<Record<DiagnosisTargetType, number>> = {
+  RUN: 1,
+  WORKFLOW: 2,
+  JOB: 3,
+  ATTEMPT: 4,
+};
+
+/** The same table read backwards, for responses that echo the target as a number. */
+export const DIAGNOSIS_TARGET_TYPE_NAMES: Readonly<Record<number, string>> = {
+  1: 'run',
+  2: 'workflow',
+  3: 'job',
+  4: 'attempt',
+};
 
 export interface BuildStepsRequest {
   projectId: string;
@@ -102,12 +128,25 @@ export class DepotApi {
     return this.client.call(rpc(CORE_BUILD, 'GetBuild'), { buildId });
   }
 
-  getBuildSteps(request: BuildStepsRequest): Promise<JsonObject> {
-    return this.client.call(rpc(BUILD, 'GetBuildSteps'), { ...request });
+  /**
+   * Both build-step RPCs go over Connect's binary protobuf encoding: their JSON binding fails on
+   * Depot's side (the server cannot encode its own response, observed 2026-09-06), while the
+   * binary encoding works. Decoded into the shape the JSON binding would have produced.
+   */
+  async getBuildSteps(request: BuildStepsRequest): Promise<JsonObject> {
+    const result = await this.client.callBinary(
+      rpc(BUILD, 'GetBuildSteps'),
+      encodeGetBuildStepsRequest(request),
+    );
+    return result instanceof Uint8Array ? decodeGetBuildStepsResponse(result) : result;
   }
 
-  getBuildStepLogs(request: BuildStepLogsRequest): Promise<JsonObject> {
-    return this.client.call(rpc(BUILD, 'GetBuildStepLogs'), { ...request });
+  async getBuildStepLogs(request: BuildStepLogsRequest): Promise<JsonObject> {
+    const result = await this.client.callBinary(
+      rpc(BUILD, 'GetBuildStepLogs'),
+      encodeGetBuildStepLogsRequest(request),
+    );
+    return result instanceof Uint8Array ? decodeGetBuildStepLogsResponse(result) : result;
   }
 
   listImages(request: {
@@ -170,7 +209,10 @@ export class DepotApi {
   }
 
   getFailureDiagnosis(targetId: string, targetType: DiagnosisTargetType): Promise<JsonObject> {
-    return this.client.call(rpc(CI, 'GetFailureDiagnosis'), { targetId, targetType });
+    return this.client.call(rpc(CI, 'GetFailureDiagnosis'), {
+      targetId,
+      targetType: DIAGNOSIS_TARGET_TYPE_WIRE[targetType],
+    });
   }
 
   /**

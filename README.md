@@ -73,11 +73,11 @@ Which token you have decides which tools work. Verified live against Depot on 20
 
 | Token | `depot_whoami`, CI tools | Project, build, registry, usage tools | How to get it |
 | --- | --- | --- | --- |
-| Organization token | yes | yes | Organization Settings, API Tokens (requires an organization admin) |
-| User token | yes | **no**: Depot answers `401 Invalid token` | Account settings, API Tokens, or `depot login` |
+| Organization token (recommended) | yes | yes | Organization Settings, API Tokens (requires an organization admin) |
+| User token | yes (plus `depot_list_images`) | **no**: Depot answers `401 Invalid token`, even for an organization owner | Account settings, API Tokens, or `depot login` |
 | Project token | no | no | not usable here |
 
-`depot_whoami` detects the user-token case and says which tools are affected. Depot's published scope matrix lists user tokens as valid for the API; in practice the core Project, Build and Usage services reject them.
+One quirk of Organization tokens: Depot's `ListOrganizations` RPC answers `401 Invalid token` for them, because they are not tied to a user. `depot_whoami` knows this, reports the token kind, and reads the organization id from the projects instead. Depot's published scope matrix lists user tokens as valid for the API; in practice the `depot.core.v1` Project, Build, Usage and trust-policy services reject them regardless of the user's role (verified with an owner's token on 2026-09-06), while `depot.build.v1` (registry images, build steps) and the whole CI API accept them. CI secrets and variables need at least an admin role with a user token.
 
 Create a dedicated token for this server so you can revoke it independently. Depot has no read-only token scope; read [the security section](#read-only-model-and-security) before you paste one anywhere.
 
@@ -463,6 +463,7 @@ How clients treat the annotations differs: Claude Desktop uses `readOnlyHint` fo
 ## Limitations
 
 - **Container builds cannot be started through Depot's API at all**, by anyone. Running a build means acquiring an mTLS BuildKit endpoint and transferring the local build context; the `depot` CLI embeds a BuildKit fork to do it. Builds here are observability only. A human runs `depot build`, or CI does.
+- **Container build steps are read over Connect's binary protobuf encoding, not JSON.** Depot's JSON binding of `GetBuildSteps` fails on Depot's side (the server cannot encode its own response), so this server carries a small dependency-free protobuf codec for the two build-step RPCs, built from Depot's published `build.proto`. As of 2026-09-06, `GetBuildStepLogs` returns a server-side `internal error` on both encodings, so `depot_diagnose_build` reports the failing step and its recorded error but usually not the step's log lines; the result says so explicitly instead of failing.
 - **`depot.ci.v1` has reference docs but no published schema.** It is absent from both `depot/proto` and the Buf Schema Registry. There is nothing to generate types from and nothing to diff for breaking changes. Rather than assert a contract nobody publishes, responses are read through tolerant accessors that accept either camelCase or snake_case, handle protobuf's int64-as-string encoding, and strip enum name prefixes. Missing fields degrade to "unknown" instead of crashing.
 - **`depot_get_ci_metrics` returns Depot's raw document alongside the fields it recognises**, because Depot documents that these RPCs return CPU and memory summaries without publishing their field names.
 - **`depot.ci.v3beta2` is beta in its name.** The secrets and variables tools are the most breakage-prone. Their list filters are undocumented, so filtering happens in this server and the request sent to Depot is empty.

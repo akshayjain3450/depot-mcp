@@ -1,4 +1,5 @@
 import {
+  mapEnumNumber,
   readBoolean,
   readEnum,
   readNumber,
@@ -8,6 +9,7 @@ import {
   readStringArray,
   type JsonObject,
 } from '../depot/shape.js';
+import { DIAGNOSIS_TARGET_TYPE_NAMES } from '../depot/api.js';
 import { truncateText } from './budget.js';
 import { STATUS_PREFIXES } from './ci-tree.js';
 
@@ -316,7 +318,7 @@ export function parseDiagnosis(response: JsonObject, limits: DiagnosisLimits): D
 
   const narrowerTargets: NarrowerTarget[] = readObjectArray(response, 'overLimitBreakdown').map(
     (entry) => ({
-      targetType: readEnum(entry, ['targetType'], ['target_type']),
+      targetType: mapEnumNumber(entry, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, ['target_type']),
       targetId: readString(entry, 'targetId'),
       label: capString(readString(entry, 'label'), LABEL_CHAR_LIMIT),
       status: readEnum(entry, ['status'], STATUS_PREFIXES),
@@ -330,7 +332,7 @@ export function parseDiagnosis(response: JsonObject, limits: DiagnosisLimits): D
     emptyReason: readEnum(response, ['emptyReason'], ['empty_reason']),
     target: {
       targetId: readString(target, 'targetId'),
-      targetType: readEnum(target, ['targetType'], ['target_type']),
+      targetType: mapEnumNumber(target, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, ['target_type']),
       status: readEnum(target, ['status'], STATUS_PREFIXES),
     },
     context: parseContext(readObject(response, 'context')),

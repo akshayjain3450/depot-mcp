@@ -13,7 +13,26 @@ const PROJECT_PREVIEW_LIMIT = 25;
  * does not say so, and the generic 401 guidance ("check the token") sends people the wrong way.
  */
 export const USER_TOKEN_WARNING =
-  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build, depot_list_images and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). The CI tools keep working.';
+  'This token can list organizations and use the Depot CI tools, but Depot\'s core Project, Build, Registry and Usage services rejected it with "Invalid token". That is how Depot answers a user token on those services; they accept only Organization tokens. depot_list_projects, depot_get_project, depot_list_builds, depot_diagnose_build and depot_get_usage will fail until DEPOT_TOKEN is an Organization token (Depot dashboard -> Organization Settings -> API Tokens). Being an organization owner does not change this. The CI tools, depot_list_images and depot_list_ci_secrets/variables keep working.';
+
+/**
+ * The mirror image, also observed live on 2026-09-06: an Organization token reaches every core and
+ * CI service but ListOrganizations answers 401 "Invalid token", because the token is not tied to a
+ * user and has no "my organizations" to list. So that one RPC is not an authentication check; the
+ * pair of results is.
+ */
+export const ORGANIZATION_TOKEN_NOTE =
+  'Organization token: Depot does not let it list organizations (that RPC answers "Invalid token" for every Organization token, which is expected), so the organization id is taken from the projects it can see.';
+
+export type TokenKind = 'organization' | 'user' | 'unknown';
+
+function isUnauthenticated(result: PromiseSettledResult<unknown>): boolean {
+  return (
+    result.status === 'rejected' &&
+    result.reason instanceof DepotApiError &&
+    result.reason.code === 'unauthenticated'
+  );
+}
 
 export const whoamiTool = defineTool({
   name: 'depot_whoami',
@@ -29,6 +48,7 @@ Never returns the token or any part of it.`,
   outputSchema: {
     apiUrl: z.string(),
     tokenSource: z.string(),
+    tokenKind: z.enum(['organization', 'user', 'unknown']),
     organizations: z.array(z.object({ orgId: z.string().optional(), name: z.string().optional() })),
     activeOrgId: z.string().optional(),
     orgSelection: z.string(),
@@ -48,24 +68,40 @@ Never returns the token or any part of it.`,
     const failures: Array<{ check: string; detail: string }> = [];
     const warnings: string[] = [];
 
-    const organizations =
-      orgResult.status === 'fulfilled'
-        ? readObjectArray(orgResult.value, 'organizations', 'orgs').map((entry) => ({
-            orgId: readString(entry, 'orgId', 'organizationId', 'id'),
-            name: readString(entry, 'name'),
-          }))
+    const projects =
+      projectResult.status === 'fulfilled'
+        ? readObjectArray(projectResult.value, 'projects').map(parseProject)
         : [];
-    if (orgResult.status === 'rejected') {
+
+    let tokenKind: TokenKind = 'unknown';
+    if (orgResult.status === 'fulfilled' && isUnauthenticated(projectResult)) {
+      tokenKind = 'user';
+    } else if (isUnauthenticated(orgResult) && projectResult.status === 'fulfilled') {
+      tokenKind = 'organization';
+    }
+
+    let organizations: Array<{ orgId: string | undefined; name: string | undefined }> = [];
+    if (orgResult.status === 'fulfilled') {
+      organizations = readObjectArray(orgResult.value, 'organizations', 'orgs').map((entry) => ({
+        orgId: readString(entry, 'orgId', 'organizationId', 'id'),
+        name: readString(entry, 'name'),
+      }));
+    } else if (tokenKind === 'organization') {
+      // Not a failure: derive the organization from the projects instead.
+      const seen = new Set<string>();
+      for (const project of projects) {
+        if (project.organizationId !== undefined && !seen.has(project.organizationId)) {
+          seen.add(project.organizationId);
+          organizations.push({ orgId: project.organizationId, name: undefined });
+        }
+      }
+    } else {
       failures.push({
         check: 'depot.core.v1.OrganizationService/ListOrganizations',
         detail: formatDepotError(orgResult.reason),
       });
     }
 
-    const projects =
-      projectResult.status === 'fulfilled'
-        ? readObjectArray(projectResult.value, 'projects').map(parseProject)
-        : [];
     if (projectResult.status === 'rejected') {
       failures.push({
         check: 'depot.core.v1.ProjectService/ListProjects',
@@ -104,18 +140,16 @@ Never returns the token or any part of it.`,
       );
     }
 
-    if (
-      orgResult.status === 'fulfilled' &&
-      projectResult.status === 'rejected' &&
-      projectResult.reason instanceof DepotApiError &&
-      projectResult.reason.code === 'unauthenticated'
-    ) {
+    if (tokenKind === 'user') {
+      warnings.push(USER_TOKEN_WARNING);
+    }
+    if (tokenKind === 'organization' && projects.length === 0) {
       warnings.push(
-        USER_TOKEN_WARNING,
+        'This Organization token sees no projects yet, so the organization id could not be determined. Create a project in the Depot dashboard, or set DEPOT_ORG_ID explicitly.',
       );
     }
 
-    if (organizations.length === 0 && failures.length === 0) {
+    if (organizations.length === 0 && failures.length === 0 && tokenKind !== 'organization') {
       warnings.push(
         'The token authenticated but sees no organizations. That is typical of a project token, which cannot reach the Depot CI API or the Depot API — use an Organization token instead.',
       );
@@ -127,11 +161,20 @@ Never returns the token or any part of it.`,
     }
 
     const text = new TextBudget(context.config.outputCharBudget);
+    const kindLabel =
+      tokenKind === 'organization'
+        ? 'Organization token'
+        : tokenKind === 'user'
+          ? 'user token'
+          : 'token kind not determined';
     text.push(
       `Depot API: ${context.config.apiUrl}`,
-      'Token source: the DEPOT_TOKEN environment variable (its value is never reported).',
+      `Token source: the DEPOT_TOKEN environment variable (its value is never reported). Kind: ${kindLabel}.`,
       '',
     );
+    if (tokenKind === 'organization') {
+      text.push(ORGANIZATION_TOKEN_NOTE, '');
+    }
     text.push(
       organizations.length === 0
         ? 'Organizations visible: none.'
@@ -178,6 +221,7 @@ Never returns the token or any part of it.`,
       data: {
         apiUrl: context.config.apiUrl,
         tokenSource: 'DEPOT_TOKEN environment variable',
+        tokenKind,
         organizations,
         activeOrgId,
         orgSelection,

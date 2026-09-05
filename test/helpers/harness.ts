@@ -1,3 +1,4 @@
+import { decodeBuildRequestForInspection } from '../../src/depot/build-proto.js';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -84,6 +85,9 @@ export function stubFetch(routes: StubRoutes, calls: RecordedCall[]): FetchLike 
 
   return (url, init) => {
     const rpc = new URL(url).pathname.replace(/^\//, '');
+    const method = rpc.split('/').pop() ?? '';
+    const decodedBinary =
+      init.body instanceof Uint8Array ? decodeBuildRequestForInspection(method, init.body) : undefined;
     const rawBody = typeof init.body === 'string' ? init.body : '{}';
     const headers: Record<string, string> = {};
     for (const [key, value] of Object.entries(init.headers ?? {})) {
@@ -91,7 +95,11 @@ export function stubFetch(routes: StubRoutes, calls: RecordedCall[]): FetchLike 
         headers[key.toLowerCase()] = value;
       }
     }
-    calls.push({ rpc, body: asObject(JSON.parse(rawBody) as unknown) ?? {}, headers });
+    calls.push({
+      rpc,
+      body: decodedBinary ?? asObject(JSON.parse(rawBody) as unknown) ?? {},
+      headers,
+    });
 
     const route = routes[rpc];
     if (route === undefined) {

@@ -11,12 +11,12 @@ import { DepotApi } from '../src/depot/api.js';
 import { DepotClient } from '../src/depot/client.js';
 import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
 import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
-import { parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
+import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
 import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
 import { parseProject } from '../src/lib/project.js';
 import { daysAgoRfc3339 } from '../src/lib/time.js';
-import { USER_TOKEN_WARNING } from '../src/tools/whoami.js';
+import { ORGANIZATION_TOKEN_NOTE, USER_TOKEN_WARNING } from '../src/tools/whoami.js';
 
 type Status = 'ok' | 'failed' | 'skipped';
 
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
   console.log('');
 
   console.log('Identity');
-  const authenticated = await attempt('ListOrganizations', async () => {
+  const listedOrganizations = await attempt('ListOrganizations', async () => {
     const organizations = readObjectArray(await api.listOrganizations(), 'organizations', 'orgs');
     for (const org of organizations) {
       console.log(`         - ${readString(org, 'orgId') ?? '?'} ${readString(org, 'name') ?? ''}`);
@@ -74,18 +74,14 @@ async function main(): Promise<void> {
     return { detail: `${organizations.length} organization(s) visible` };
   });
 
-  if (!authenticated) {
-    console.log('');
-    console.log('Authentication failed, so the remaining checks were not attempted.');
-    summarise();
-    process.exitCode = 1;
-    return;
+  if (!listedOrganizations) {
+    console.log(`         ! ${ORGANIZATION_TOKEN_NOTE}`);
   }
 
   let firstProjectId = config.projectId;
   console.log('');
   console.log('Container builds');
-  await attempt('ListProjects', async () => {
+  const listedProjects = await attempt('ListProjects', async () => {
     let response: JsonObject;
     try {
       response = await api.listProjects({ pageSize: 100 });
@@ -96,6 +92,10 @@ async function main(): Promise<void> {
       throw error;
     }
     const projects = readObjectArray(response, 'projects').map(parseProject);
+    const orgIds = [...new Set(projects.map((project) => project.organizationId).filter(Boolean))];
+    if (!listedOrganizations && orgIds.length > 0) {
+      console.log(`         - organization id(s) from projects: ${orgIds.join(', ')}`);
+    }
     for (const project of projects.slice(0, 10)) {
       console.log(
         `         - ${project.projectId ?? '?'} ${project.name ?? ''} (${project.regionId ?? '?'}, hardware ${project.hardware ?? '?'})`,
@@ -104,6 +104,26 @@ async function main(): Promise<void> {
     firstProjectId ??= projects[0]?.projectId;
     return { detail: `${projects.length} project(s)` };
   });
+
+  if (!listedOrganizations && listedProjects) {
+    // An Organization token cannot list organizations; that is expected, not a failure.
+    const index = checks.findIndex((entry) => entry.name === 'ListOrganizations');
+    if (index !== -1) {
+      checks[index] = {
+        name: 'ListOrganizations',
+        status: 'skipped',
+        detail: 'not available to Organization tokens (expected)',
+      };
+    }
+  }
+
+  if (!listedOrganizations && !listedProjects) {
+    console.log('');
+    console.log('Authentication failed on both identity checks, so the remaining checks were not attempted.');
+    summarise();
+    process.exitCode = 1;
+    return;
+  }
 
   let failedBuildId: string | undefined;
   if (firstProjectId === undefined) {
@@ -120,7 +140,7 @@ async function main(): Promise<void> {
           `         - ${build.buildId ?? '?'} ${build.status ?? '?'} ${build.cachedSteps ?? 0}/${build.totalSteps ?? 0} cached`,
         );
       }
-      failedBuildId = builds.find((build) => build.status === 'failed')?.buildId;
+      failedBuildId = builds.find((build) => isBuildFailure(build.status))?.buildId;
       return { detail: `${builds.length} build(s) in ${projectId}` };
     });
 
@@ -138,6 +158,7 @@ async function main(): Promise<void> {
     await attempt('GetBuildSteps', async () => {
       const steps = readObjectArray(
         await api.getBuildSteps({ projectId, buildId, pageSize: 500 }),
+        'buildSteps',
         'steps',
       ).map(parseBuildStep);
       const failing = selectFailingStep(steps);
