@@ -315,11 +315,13 @@ describe('redactValue', () => {
     ['random base62 with whitespace', pseudoRandom(`${BASE64.slice(0, 62)} `, 1 << 20, 19)],
     ['prose', 'lorem ipsum dolor sit amet, consectetur adipiscing elit '.repeat(18725)],
     ['repeated pattern prefixes', 'eyJeyJeyJ aws://a:b:c:d://password_x=1 SG.SG.SG. '.repeat(21500)],
-  ])('scans a 1 MB value (%s) in under 50 ms', (_label, value) => {
+  ])('scans a 1 MB value (%s) in linear time', (_label, value) => {
     expect(value.length).toBeGreaterThanOrEqual(1 << 20);
     redactValue(HARMLESS, value.slice(0, 1024)); // warm up the regexes
     const started = performance.now();
     redactValue(HARMLESS, value);
-    expect(performance.now() - started).toBeLessThan(50);
+    // Linear scanning finishes in tens of milliseconds; catastrophic backtracking would take
+    // seconds. The bound is loose so shared CI runners (observed 50-85 ms) do not flake.
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
