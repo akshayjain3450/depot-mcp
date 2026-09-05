@@ -17,6 +17,7 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 - [Why this exists](#why-this-exists)
 - [Status](#status)
 - [Prerequisites](#prerequisites)
+  - [Which token can do what](#which-token-can-do-what)
 - [Installation](#installation)
 - [Compatibility](#compatibility)
 - [Where to find it](#where-to-find-it)
@@ -69,15 +70,20 @@ As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise
 - **A Depot Organization token.** Depot dashboard, Organization Settings, API Tokens. A user token from `depot login` also works but spans every organization you belong to, so set `DEPOT_ORG_ID` too.
 - **Project tokens will not work.** Depot's own scope matrix excludes them from Depot CI and the API entirely.
 
-Which token you have decides which tools work. Verified live against Depot on 2026-09-06:
+### Which token can do what
 
-| Token | `depot_whoami`, CI tools | Project, build, registry, usage tools | How to get it |
-| --- | --- | --- | --- |
-| Organization token (recommended) | yes | yes | Organization Settings, API Tokens (requires an organization admin) |
-| User token | yes (plus `depot_list_images`) | **no**: Depot answers `401 Invalid token`, even for an organization owner | Account settings, API Tokens, or `depot login` |
-| Project token | no | no | not usable here |
+Depot has three kinds of token and they are not interchangeable. Verified live on 2026-09-06, including with a user token belonging to an organization owner:
 
-One quirk of Organization tokens: Depot's `ListOrganizations` RPC answers `401 Invalid token` for them, because they are not tied to a user. `depot_whoami` knows this, reports the token kind, and reads the organization id from the projects instead. Depot's published scope matrix lists user tokens as valid for the API; in practice the `depot.core.v1` Project, Build, Usage and trust-policy services reject them regardless of the user's role (verified with an owner's token on 2026-09-06), while `depot.build.v1` (registry images, build steps) and the whole CI API accept them. CI secrets and variables need at least an admin role with a user token.
+| Tool group | Organization token | User token |
+| --- | --- | --- |
+| `depot_whoami` | yes | yes |
+| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
+| `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
+| `depot_list_images` | yes | yes |
+| `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
+| Project token | runs nothing | |
+
+The full matrix, per tool and per Depot service, with how to obtain each token, is in [docs/tokens.md](./docs/tokens.md). `depot_whoami` reports which kind it holds and names the tools that will not work.
 
 Create a dedicated token for this server so you can revoke it independently. Depot has no read-only token scope; read [the security section](#read-only-model-and-security) before you paste one anywhere.
 
@@ -491,6 +497,7 @@ One process, one credential, no listening port, no protobuf toolchain. Depot's C
 | Symptom | Cause and fix |
 | --- | --- |
 | Server exits immediately with code 78 | `DEPOT_TOKEN` is unset or empty. The client's `env` block is the usual place it went missing. |
+| A project, build, or usage tool says `unauthenticated` while CI tools work | You have a user token. Those services accept only Organization tokens; see [Which token can do what](#which-token-can-do-what). |
 | Every list is empty but the token is valid | Multi-organization token without `DEPOT_ORG_ID`. Call `depot_whoami`; it names the organizations it can see. |
 | `permission_denied` or `unauthenticated` | Project token (not supported), a revoked token, or the wrong organization. `depot_whoami` distinguishes them. |
 | `depot_diagnose_ci_failure` returns `state: empty` | The run had no failures Depot could cluster, or the ID is not a failed run. `depot_list_ci_runs` with `status: ["failed"]` finds one. |

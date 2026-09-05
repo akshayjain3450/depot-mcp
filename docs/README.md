@@ -2,6 +2,10 @@
 
 Design notes and distribution details for depot-mcp. The README covers installation and usage; this directory holds the reasoning behind the shape of the server.
 
+## Reference
+
+- [`tokens.md`](./tokens.md): which Depot token kind can call which tool and which Depot service, verified live, and how to obtain each.
+
 ## Design and research
 
 - [`../research/mcp-design.md`](../research/mcp-design.md): the design proposal this implementation follows. Tool list, tiers, exclusions, auth and secret handling, the hard parts (log volume, streaming limits, timeouts), testing strategy, stack choice.
