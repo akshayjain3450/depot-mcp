@@ -36,6 +36,11 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     routes: { [RPC.getRun]: ok(fixture('run')), [RPC.getRunStatus]: ok(fixture('run-status')) },
   },
   {
+    name: 'depot_wait_for_ci_run',
+    args: { runId: 'run_7f3d9c21', timeoutSeconds: 5 },
+    routes: { [RPC.getRunStatus]: ok(fixture('run-status')) },
+  },
+  {
     name: 'depot_get_ci_logs',
     args: { id: 'att_91bc02' },
     routes: { [RPC.getJobAttemptLogs]: [ok(fixture('logs-page1')), ok(fixture('logs-page2'))] },
@@ -57,6 +62,21 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
       [RPC.listArtifacts]: ok(fixture('artifacts')),
       [RPC.getArtifactDownloadUrl]: ok({ downloadUrl: 'https://signed.example/artifact' }),
     },
+  },
+  {
+    name: 'depot_get_ci_artifact_url',
+    args: { artifactId: 'art_7c21aa' },
+    routes: {
+      [RPC.getArtifactDownloadUrl]: ok({
+        downloadUrl:
+          'https://artifacts.example.s3.amazonaws.com/art_7c21aa?X-Amz-Date=20260906T120000Z&X-Amz-Expires=900&X-Amz-Signature=abc',
+      }),
+    },
+  },
+  {
+    name: 'depot_get_build',
+    args: { buildId: 'bld_4a91c7' },
+    routes: { [RPC.getBuild]: ok(fixture('build')) },
   },
   {
     name: 'depot_diagnose_build',

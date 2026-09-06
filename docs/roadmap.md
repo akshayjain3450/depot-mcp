@@ -7,7 +7,7 @@ Two constraints shape every decision here:
 - **Depot has no read-only token.** Any token that can list runs can also cancel them and delete projects. The tool list is the only safety boundary, so every write is opt-in and every irreversible operation is excluded outright.
 - **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The roadmap ends at 42, with the gated ones invisible unless enabled.
 
-## Today: 16 tools, 2 prompts
+## Today: 19 tools, 2 prompts
 
 All read-only, all registered unconditionally.
 
@@ -17,11 +17,14 @@ All read-only, all registered unconditionally.
 | CI diagnosis | `depot_diagnose_ci_failure` | `GetFailureDiagnosis` |
 | CI | `depot_list_ci_runs` | `ListRuns` |
 | CI | `depot_get_ci_run` | `GetRun`, `GetRunStatus` |
+| CI | `depot_wait_for_ci_run` | `GetRunStatus`, polled at a bounded interval up to a bounded timeout |
 | CI | `depot_get_ci_logs` | `GetJobAttemptLogs` (plus `GetRunStatus` to resolve ids) |
 | CI | `depot_get_ci_job_summary` | `GetJobSummary` |
 | CI | `depot_get_ci_metrics` | `GetRunMetrics`, `GetJobMetrics`, `GetJobAttemptMetrics` |
 | CI | `depot_list_ci_artifacts` | `ListArtifacts`, `GetArtifactDownloadURL` on request |
+| CI | `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` |
 | Builds | `depot_diagnose_build` | `GetBuild`, `GetBuildSteps`, `GetBuildStepLogs` (binary encoding) |
+| Builds | `depot_get_build` | `GetBuild` |
 | Builds | `depot_list_builds` | `ListBuilds` |
 | Projects | `depot_list_projects` | `ListProjects` |
 | Projects | `depot_get_project` | `GetProject`, `ListTrustPolicies` |
@@ -34,7 +37,7 @@ Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
 
 ## 0.2: read additions
 
-Twelve always-on tools, ordered by value.
+Twelve always-on tools, ordered by value. Three are shipped (marked); nine remain.
 
 | Tool | Depot RPCs | What it answers |
 | --- | --- | --- |
@@ -42,12 +45,12 @@ Twelve always-on tools, ordered by value.
 | `depot_get_ci_attempt` | `GetAttempt` | One attempt's status, timing, and sandbox identifiers. |
 | `depot_list_ci_workflows` | `ListWorkflows` | Workflow runs filtered by name, repo, status, trigger, sha, or PR, with job counts. Defaults to every status, since Depot returns nothing without a status filter. |
 | `depot_get_ci_workflow` | `GetWorkflow` | Execution history including rerun and retry lineage. Prerequisite for the 0.3 rerun previews. |
-| `depot_wait_for_ci_run` | `GetRunStatus`, polled | Waits up to a bounded timeout for a run to finish, reporting which nodes changed. Polls the unary RPC only; never the streaming ones. |
-| `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` | A short-lived signed download URL for one artifact, never logged. |
+| `depot_wait_for_ci_run` | `GetRunStatus`, polled | **Shipped.** Waits up to a bounded timeout for a run to finish, reporting which nodes changed. Polls the unary RPC only; never the streaming ones. |
+| `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` | **Shipped.** A short-lived signed download URL for one artifact, never logged. |
 | `depot_list_project_usage` | `ListProjectUsage` | Every project's build count, build seconds, and layer cache size in one call. Organization token only. |
 | `depot_get_cache_summary` | `GetProject`, `ListProjectUsage`, `ListBuilds`, `GetUsage` | Cache policy versus current cache size, hit ratio over recent builds, minutes saved. Entry-level listing is impossible; the tool says so. |
 | `depot_compare_ci_runs` | `GetRunStatus`, `GetRunMetrics`, `GetFailureDiagnosis` | Job status, duration, and peak memory deltas between two runs, plus failures new in one of them. Ship as a prompt first. |
-| `depot_get_build` | `GetBuild` | One build's status, timing, and cache counters. The build-side wait primitive. |
+| `depot_get_build` | `GetBuild` | **Shipped.** One build's status, timing, and cache counters. The build-side wait primitive. |
 | `depot_list_project_tokens` | `ListTokens` | Credential inventory: id, description, created. Must be verified live to return no secret material before shipping. |
 | `depot_audit_trust_policies` | `ListProjects`, `ListTrustPolicies` | Which external CI identities can build into which project, organization-wide. |
 
@@ -106,8 +109,8 @@ Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagn
 
 | | Tools | Prompts | Resources |
 | --- | --- | --- | --- |
-| Today (0.1) | 16 | 2 | 0 |
-| 0.2 reads, always on | +12 | +5 | +4 |
+| Today (0.1.1 plus unreleased) | 19 | 2 | 0 |
+| 0.2 reads, always on | +9 | +5 | +4 |
 | 0.2 reads, beta-gated | +5 | | |
 | 0.3 writes, flag-gated | +9 | | |
 | End of roadmap | 42 | 7 | 4 |

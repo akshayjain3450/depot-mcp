@@ -4,6 +4,7 @@ import type { DepotMcpConfig } from './config.js';
 import { DepotApi } from './depot/api.js';
 import { DepotClient, type FetchLike } from './depot/client.js';
 import { registerPrompts } from './prompts.js';
+import type { ToolContext } from './lib/tool.js';
 import { registerTools, type RegistrationSummary } from './tools/index.js';
 
 export const SERVER_NAME = 'depot-mcp';
@@ -29,6 +30,7 @@ export interface CreateServerOptions {
   /** Injected by the test suite so tools can run against recorded fixtures. */
   readonly fetch?: FetchLike | undefined;
   readonly sleep?: ((ms: number) => Promise<void>) | undefined;
+  readonly now?: (() => number) | undefined;
 }
 
 export interface CreatedServer {
@@ -37,12 +39,20 @@ export interface CreatedServer {
 }
 
 export function createServer(options: CreateServerOptions): CreatedServer {
+  const sleep =
+    options.sleep ??
+    ((ms: number) =>
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, ms);
+      }));
+  const now = options.now ?? (() => Date.now());
   const client = new DepotClient({
     token: options.config.token,
     apiUrl: options.config.apiUrl,
     orgId: options.config.orgId,
     fetch: options.fetch,
-    sleep: options.sleep,
+    sleep,
+    now,
   });
 
   const server = new McpServer(
@@ -60,7 +70,7 @@ export function createServer(options: CreateServerOptions): CreatedServer {
     },
   );
 
-  const context = { api: new DepotApi(client), config: options.config };
+  const context: ToolContext = { api: new DepotApi(client), config: options.config, sleep, now };
   const registration = registerTools(server, context);
   registerPrompts(server);
 

@@ -128,6 +128,48 @@ const GIANT_CASES: readonly GiantCase[] = [
     saysTruncated: TRUNCATED_FOOTER,
   },
   {
+    name: 'depot_wait_for_ci_run',
+    args: { runId: 'run_giant', timeoutSeconds: 30 },
+    routes: {
+      // Every job flips between the first and last poll, so the change list is what grows.
+      [RPC.getRunStatus]: [
+        ok({
+          runId: 'run_giant',
+          status: 'STATUS_RUNNING',
+          workflows: [
+            {
+              workflowId: 'wf_giant',
+              name: 'CI',
+              status: 'STATUS_RUNNING',
+              jobs: many(300, (j) => ({
+                jobId: `job_${j}`,
+                jobKey: `job number ${j} ${'k'.repeat(40)}`,
+                status: 'STATUS_RUNNING',
+              })),
+            },
+          ],
+        }),
+        ok({
+          runId: 'run_giant',
+          status: 'STATUS_FAILED',
+          workflows: [
+            {
+              workflowId: 'wf_giant',
+              name: 'CI',
+              status: 'STATUS_FAILED',
+              jobs: many(300, (j) => ({
+                jobId: `job_${j}`,
+                jobKey: `job number ${j} ${'k'.repeat(40)}`,
+                status: 'STATUS_FAILED',
+              })),
+            },
+          ],
+        }),
+      ],
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
     name: 'depot_get_ci_logs',
     args: { id: 'att_giant' },
     routes: {
@@ -166,6 +208,29 @@ const GIANT_CASES: readonly GiantCase[] = [
           name: `artifact-${i}-${'n'.repeat(60)}.xml`,
           sizeBytes: 1024 * i,
         })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // The URL is the payload, so this only proves the budget wrapper still applies; a real signed
+    // URL is around a kilobyte and never reaches it.
+    name: 'depot_get_ci_artifact_url',
+    args: { artifactId: 'art_giant' },
+    routes: {
+      [RPC.getArtifactDownloadUrl]: ok({
+        downloadUrl: `https://signed.example/art_giant?X-Amz-Signature=${'s'.repeat(5_000)}`,
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // GetBuild has no field that grows with the build; the id is the only string Depot controls.
+    name: 'depot_get_build',
+    args: { buildId: 'bld_giant' },
+    routes: {
+      [RPC.getBuild]: ok({
+        build: { buildId: `bld_${'g'.repeat(5_000)}`, status: 'STATUS_SUCCESS', cachedSteps: 1, totalSteps: 2 },
       }),
     },
     saysTruncated: TRUNCATED_FOOTER,

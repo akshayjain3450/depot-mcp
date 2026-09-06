@@ -288,3 +288,136 @@ describe('depot_diagnose_build when Depot cannot serve step data', () => {
     expect(result.text).toContain('permission_denied');
   });
 });
+
+describe('depot_get_build', () => {
+  it('returns status, timing, cache counters and a diagnose hint for a failed build', async () => {
+    harness = await createHarness({ routes: { [RPC.getBuild]: ok(fixture('build')) } });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: 'bld_4a91c7' });
+
+    expect(result.isError, result.text).toBe(false);
+    expect(harness.calls).toHaveLength(1);
+    expect(harness.calls[0]?.body).toEqual({ buildId: 'bld_4a91c7' });
+    expect(result.structured).toEqual({
+      build: {
+        buildId: 'bld_4a91c7',
+        status: 'failed',
+        createdAt: '2026-09-03T18:20:00Z',
+        startedAt: '2026-09-03T18:20:04Z',
+        finishedAt: '2026-09-03T18:23:19Z',
+        buildDurationSeconds: 195,
+        savedDurationSeconds: 412,
+        cachedSteps: 11,
+        totalSteps: 14,
+        cacheHitRatio: 0.79,
+      },
+      terminal: true,
+      failure: true,
+      cacheSummary: { cachedSteps: 11, totalSteps: 14, cacheHitRatio: 0.79, savedDurationSeconds: 412 },
+      hint: 'Find the failing step with depot_diagnose_build {"buildId":"bld_4a91c7"} (add projectId if you know it).',
+    });
+    expect(result.text).toContain('Build bld_4a91c7: failed, 3m15s.');
+    expect(result.text).toContain('created 2026-09-03T18:20:00Z, started 2026-09-03T18:20:04Z, finished 2026-09-03T18:23:19Z');
+    expect(result.text).toContain('Steps: 11 of 14 served from cache (79% cached). Cache saved 6m52s.');
+    expect(result.text).toContain('depot_diagnose_build {"buildId":"bld_4a91c7"}');
+  });
+
+  it('gives no hint for a successful build and drops the projectId aside when one is configured', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok({
+          build: { buildId: 'bld_ok', status: 'STATUS_SUCCESS', cachedSteps: 14, totalSteps: 14 },
+        }),
+      },
+      config: { projectId: 'proj_api7f2' },
+    });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: 'bld_ok' });
+
+    expect(result.structured).toMatchObject({
+      build: { status: 'success', cacheHitRatio: 1 },
+      terminal: true,
+      failure: false,
+    });
+    expect(result.structured.hint).toBeUndefined();
+    expect(result.text).toContain('100% cached');
+    expect(result.text).not.toContain('depot_diagnose_build');
+  });
+
+  it('says a running build is not finished and suggests polling again', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok({
+          build: { buildId: 'bld_run', status: 1, createdAt: '2026-09-06T11:59:00Z', startedAt: '2026-09-06T11:59:10Z' },
+        }),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: 'bld_run' });
+
+    expect(result.structured).toMatchObject({
+      build: { status: 'running' },
+      terminal: false,
+      failure: false,
+    });
+    expect(result.structured.hint).toContain('depot_get_build {"buildId":"bld_run"} again');
+    expect(result.text).toContain('unknown duration');
+    expect(result.text).not.toContain('Steps:');
+  });
+
+  it('reads a snake_case build document, including an error status, the same as camelCase', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getBuild]: ok({
+          build: {
+            build_id: 'bld_snake',
+            status: 'STATUS_ERROR',
+            started_at: '2026-09-06T10:00:00Z',
+            finished_at: '2026-09-06T10:00:30Z',
+            saved_duration_seconds: '12',
+            cached_steps: '1',
+            total_steps: '4',
+          },
+        }),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: 'bld_snake' });
+
+    expect(result.isError, result.text).toBe(false);
+    expect(result.structured).toMatchObject({
+      build: {
+        buildId: 'bld_snake',
+        status: 'error',
+        buildDurationSeconds: 30,
+        savedDurationSeconds: 12,
+        cachedSteps: 1,
+        totalSteps: 4,
+        cacheHitRatio: 0.25,
+      },
+      failure: true,
+      terminal: true,
+    });
+    expect(result.text).toContain('depot_diagnose_build');
+  });
+
+  it('translates not_found into a tool error', async () => {
+    harness = await createHarness({
+      routes: { [RPC.getBuild]: connectError(404, 'not_found', 'build not found') },
+    });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: 'bld_missing' });
+
+    expect(result.isError).toBe(true);
+    expect(result.text).toContain('not_found');
+  });
+
+  it('rejects a blank build id before calling Depot', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const result = await callTool(harness, 'depot_get_build', { buildId: ' ' });
+
+    expect(result.isError).toBe(true);
+    expect(harness.calls).toHaveLength(0);
+  });
+});

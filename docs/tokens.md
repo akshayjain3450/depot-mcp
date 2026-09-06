@@ -12,16 +12,19 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_diagnose_ci_failure` | yes | yes |
 | `depot_list_ci_runs` | yes | yes |
 | `depot_get_ci_run` | yes | yes |
+| `depot_wait_for_ci_run` | yes | yes |
 | `depot_get_ci_logs` | yes | yes |
 | `depot_get_ci_job_summary` | yes | yes |
 | `depot_get_ci_metrics` | yes | yes |
 | `depot_list_ci_artifacts` | yes | yes |
+| `depot_get_ci_artifact_url` | yes | yes |
 | `depot_list_ci_secrets` | yes | yes, if the user is an organization admin or owner (members get `permission_denied`) |
 | `depot_list_ci_variables` | yes | same as secrets |
 | `depot_list_images` | yes | yes |
 | `depot_list_projects` | yes | **no** (`401 Invalid token`) |
 | `depot_get_project` | yes | **no** |
 | `depot_list_builds` | yes | **no** |
+| `depot_get_build` | yes | **no** |
 | `depot_diagnose_build` | yes | **no** (needs `GetBuild`, which refuses user tokens; the step endpoints themselves accept them) |
 | `depot_get_usage` | yes | **no** |
 | Prompt `diagnose-latest-failure` | yes | yes |

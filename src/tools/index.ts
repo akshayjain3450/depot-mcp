@@ -1,13 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolContext, ToolModule } from '../lib/tool.js';
-import { listCiArtifactsTool } from './ci-artifacts.js';
+import { getCiArtifactUrlTool, listCiArtifactsTool } from './ci-artifacts.js';
 import { listCiSecretsTool, listCiVariablesTool } from './ci-config.js';
 import { diagnoseCiFailureTool } from './ci-diagnose.js';
 import { getCiLogsTool } from './ci-logs.js';
 import { getCiMetricsTool } from './ci-metrics.js';
 import { getCiRunTool, listCiRunsTool } from './ci-runs.js';
 import { getCiJobSummaryTool } from './ci-summary.js';
-import { diagnoseBuildTool, listBuildsTool } from './builds.js';
+import { waitForCiRunTool } from './ci-wait.js';
+import { diagnoseBuildTool, getBuildTool, listBuildsTool } from './builds.js';
 import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
 import { getUsageTool } from './usage.js';
@@ -18,11 +19,14 @@ export const readOnlyTools: readonly ToolModule[] = [
   diagnoseCiFailureTool,
   listCiRunsTool,
   getCiRunTool,
+  waitForCiRunTool,
   getCiLogsTool,
   getCiJobSummaryTool,
   getCiMetricsTool,
   listCiArtifactsTool,
+  getCiArtifactUrlTool,
   diagnoseBuildTool,
+  getBuildTool,
   listBuildsTool,
   listProjectsTool,
   getProjectTool,

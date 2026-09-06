@@ -13,9 +13,11 @@ import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
 import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
 import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
+import { waitForRun } from '../src/lib/ci-wait.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
 import { parseProject } from '../src/lib/project.js';
-import { daysAgoRfc3339 } from '../src/lib/time.js';
+import { daysAgoRfc3339, formatDuration } from '../src/lib/time.js';
+import { signedUrlExpiry } from '../src/tools/ci-artifacts.js';
 import { ORGANIZATION_TOKEN_NOTE, USER_TOKEN_WARNING } from '../src/tools/whoami.js';
 
 type Status = 'ok' | 'failed' | 'skipped';
@@ -126,6 +128,7 @@ async function main(): Promise<void> {
   }
 
   let failedBuildId: string | undefined;
+  let firstBuildId: string | undefined;
   if (firstProjectId === undefined) {
     record('ListBuilds', 'skipped', 'no project id available');
   } else {
@@ -141,8 +144,21 @@ async function main(): Promise<void> {
         );
       }
       failedBuildId = builds.find((build) => isBuildFailure(build.status))?.buildId;
+      firstBuildId = builds[0]?.buildId;
       return { detail: `${builds.length} build(s) in ${projectId}` };
     });
+
+    if (firstBuildId === undefined) {
+      record('GetBuild', 'skipped', 'no build to fetch');
+    } else {
+      const buildId = firstBuildId;
+      await attempt('GetBuild', async () => {
+        const build = parseBuild(await api.getBuild(buildId));
+        return {
+          detail: `${buildId} ${build.status ?? '?'} in ${formatDuration(build.buildDurationSeconds)}, ${build.cachedSteps ?? 0}/${build.totalSteps ?? 0} cached; depot_get_build is exercisable`,
+        };
+      });
+    }
 
     await attempt('ListImages', async () => {
       const images = readObjectArray(await api.listImages({ projectId, pageSize: 10 }), 'images');
@@ -227,6 +243,48 @@ async function main(): Promise<void> {
     await attempt('GetRunStatus', async () => {
       const workflows = readObjectArray(await api.getRunStatus(runId), 'workflows');
       return { detail: `${workflows.length} workflow(s) in the run tree` };
+    });
+
+    // The run is already terminal, so this must return after one poll without sleeping.
+    await attempt('GetRunStatus polled (depot_wait_for_ci_run, 5s timeout)', async () => {
+      const waited = await waitForRun({
+        api,
+        sleep: (ms) =>
+          new Promise((resolve) => {
+            setTimeout(resolve, ms);
+          }),
+        now: () => Date.now(),
+        runId,
+        timeoutMs: 5_000,
+        pollMs: 2_000,
+      });
+      if (waited.outcome === 'timed_out') {
+        throw new Error(`run ${runId} did not read as terminal within 5s (status ${waited.last.status ?? '?'})`);
+      }
+      return {
+        detail: `outcome=${waited.outcome} status=${waited.last.status ?? '?'} after ${waited.polls} poll(s) in ${waited.elapsedMs}ms`,
+      };
+    });
+
+    await attempt('GetArtifactDownloadURL', async () => {
+      const artifacts = readObjectArray(await api.listArtifacts({ runId, pageSize: 5 }), 'artifacts');
+      const artifactId = artifacts
+        .map((artifact) => readString(artifact, 'artifactId', 'id'))
+        .find((id) => id !== undefined);
+      if (artifactId === undefined) {
+        return { detail: 'run has no artifacts; depot_get_ci_artifact_url not exercised' };
+      }
+      const url = readString(await api.getArtifactDownloadUrl(artifactId), 'downloadUrl', 'url', 'signedUrl');
+      if (url === undefined) {
+        throw new Error(`no download URL in the response for artifact ${artifactId}`);
+      }
+      const expiry = signedUrlExpiry(url, Date.now());
+      // The URL is a bearer capability, so only its host and lifetime are printed.
+      return {
+        detail: `signed URL on ${new URL(url).host}${
+          expiry === undefined ? '' : `, expires in ${expiry.expiresInSeconds}s`
+        } for artifact ${artifactId} (URL not printed)`,
+      };
     });
 
     await attempt('GetJobAttemptLogs', async () => {

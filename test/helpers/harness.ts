@@ -51,9 +51,17 @@ export const NOT_FOUND = connectError(404, 'not_found', 'no such record');
 export interface Harness {
   readonly client: Client;
   readonly calls: RecordedCall[];
+  /** Every pause the server asked for, in milliseconds. None of them actually waits. */
+  readonly sleeps: number[];
   callsTo(rpc: string): RecordedCall[];
   close(): Promise<void>;
 }
+
+/**
+ * The harness clock starts here and advances only when the server sleeps, so a tool that polls
+ * until a deadline sees time pass without the test waiting for it.
+ */
+export const HARNESS_EPOCH = Date.parse('2026-09-06T12:00:00Z');
 
 export function testConfig(overrides: Partial<DepotMcpConfig> = {}): DepotMcpConfig {
   return {
@@ -129,10 +137,17 @@ export async function createHarness(options: {
   config?: Partial<DepotMcpConfig>;
 }): Promise<Harness> {
   const calls: RecordedCall[] = [];
+  const sleeps: number[] = [];
+  let clock = HARNESS_EPOCH;
   const { server } = createServer({
     config: testConfig(options.config),
     fetch: stubFetch(options.routes, calls),
-    sleep: () => Promise.resolve(),
+    sleep: (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+      return Promise.resolve();
+    },
+    now: () => clock,
   });
 
   const client = new Client({ name: 'depot-mcp-test', version: '0.0.0' });
@@ -142,6 +157,7 @@ export async function createHarness(options: {
   return {
     client,
     calls,
+    sleeps,
     callsTo: (rpc) => calls.filter((call) => call.rpc === rpc),
     close: async () => {
       await client.close();

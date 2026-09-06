@@ -78,10 +78,10 @@ Depot has three kinds of token and they are not interchangeable. Verified live o
 | Tool group | Organization token | User token |
 | --- | --- | --- |
 | `depot_whoami` | yes | yes |
-| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
+| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_wait_for_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts`, `depot_get_ci_artifact_url` | yes | yes |
 | `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
 | `depot_list_images` | yes | yes |
-| `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
+| `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_get_build`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
 | Project token | runs nothing | |
 
 The full matrix, per tool and per Depot service, with how to obtain each token, is in [docs/tokens.md](./docs/tokens.md). `depot_whoami` reports which kind it holds and names the tools that will not work.
@@ -407,7 +407,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 19 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -423,10 +423,12 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | --- | --- |
 | `depot_list_ci_runs` | Which runs happened recently, and which failed? Filter by status, repo, SHA, trigger, PR. |
 | `depot_get_ci_run` | What is this run's workflow, job, and attempt tree, and which node broke? |
+| `depot_wait_for_ci_run` | Is it done yet? Polls `GetRunStatus` for up to `timeoutSeconds` (default 120, max 300) until the run, or one job named by `untilJobKey`, is terminal, then reports the outcome, elapsed time, poll count, and every node that changed state. Bounded polling only; a timeout returns `timedOut: true` and the agent calls again. Never streams. |
 | `depot_get_ci_logs` | Bounded raw logs for an attempt: tail by default, `grep`/step/stream filters, forward paging with an exact cursor. Filters run in this server after fetching, so `grep` still reads up to `DEPOT_MCP_MAX_LOG_PAGES` pages. When the page cap stops the walk the result says the log continues, and `pageCapHit` plus `nextPageToken` let you carry on; it never labels the middle of a log as its tail. Line bodies are capped at 2000 characters (`bodyTruncated`). |
 | `depot_get_ci_job_summary` | What did the job publish about itself (the `$GITHUB_STEP_SUMMARY` equivalent)? |
 | `depot_get_ci_metrics` | Was this an OOM kill or CPU starvation? CPU/memory for a run, job, or attempt. |
 | `depot_list_ci_artifacts` | What did the run upload, and what is its signed download URL? Accepts `pageToken`. |
+| `depot_get_ci_artifact_url` | A signed download URL for one artifact by id, with its expiry when the URL carries one. The URL is a short-lived bearer capability; the result says so and the tool never fetches it. |
 | `depot_list_ci_secrets` | Which CI secrets exist and where do they apply? **Names and scoping only**; Depot never returns secret values. |
 | `depot_list_ci_variables` | Which CI variables exist, with values and scoping. Credential-shaped values are redacted (see below). |
 
@@ -435,6 +437,7 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | Tool | Answers |
 | --- | --- |
 | `depot_list_builds` | Recent container builds with duration and cache hit ratio. |
+| `depot_get_build` | One build's status, timing, cache counters and hit ratio, with `terminal` and `failure` flags. Points at `depot_diagnose_build` when the build failed; cheap enough to poll a running build. |
 | `depot_list_projects` | Which build projects exist, in which region, on what hardware, with which cache policy? Accepts `pageToken`. |
 | `depot_get_project` | One project's full config plus its OIDC trust policies. |
 | `depot_list_images` | What is in this project's registry, with digests and sizes? |

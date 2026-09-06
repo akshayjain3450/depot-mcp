@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `depot_wait_for_ci_run`: bounded polling of `GetRunStatus` until a run, or one job named by `untilJobKey`, reaches a terminal state. `timeoutSeconds` (5 to 300, default 120) and `pollSeconds` (2 to 30, default 5) cap the wait; on expiry the result says `timedOut: true` with the run still running so the agent can call again. Reports elapsed time, poll count, and every workflow, job, and attempt whose state changed between the first and last poll. Sleeps never total more than the timeout and no poll starts after the deadline. Never uses Depot's streaming RPCs.
+- `depot_get_ci_artifact_url`: a signed download URL for one artifact by id (`GetArtifactDownloadURL`), with the expiry read from the URL's own signature when present. The result labels the URL a short-lived bearer capability that must not be written anywhere durable. The tool never fetches the URL.
+- `depot_get_build`: one container build's status, timing, cache counters and hit ratio (`GetBuild`), with `terminal` and `failure` flags and a hint pointing at `depot_diagnose_build` when the build failed.
+- Tool count is 19. `ToolContext` carries an injectable `sleep` and `now`, and the test harness advances a virtual clock when the server sleeps, so waiting tools are tested without waiting.
 
 ## [0.1.1] - 2026-09-06
 
