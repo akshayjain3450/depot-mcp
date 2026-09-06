@@ -2,12 +2,14 @@ name: Release
 
 # Publishes to npm with provenance when a v* tag is pushed.
 #
-# One-time setup:
-#   1. Create an npm Automation token (npmjs.com > Access Tokens > Granular, publish rights on depot-mcp)
-#      and store it as the repository secret NPM_TOKEN.
-#   2. The tag must equal the version in package.json, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+# Authentication is npm "trusted publishing": npm trusts the GitHub Actions
+# identity (this repository, this workflow file, the `npm` environment) via
+# OIDC, so no npm token is stored anywhere. One-time setup on npmjs.com:
+#   package depot-mcp > Settings > Trusted Publisher > GitHub Actions
+#   owner akshayjain3450, repository depot-mcp, workflow release.yml, environment npm
 #
-# Provenance needs `id-token: write` and a public repository on GitHub-hosted runners.
+# The tag must equal the version in package.json, e.g. `git tag v0.1.0 && git push origin v0.1.0`.
+# Provenance and trusted publishing both need `id-token: write` and a public repository.
 
 on:
   push:
@@ -48,10 +50,12 @@ jobs:
       - run: node .github/scripts/check-metadata.mjs
       - run: node .github/scripts/mcp-smoke.mjs dist/index.js
 
-      - name: Publish to npm
+      # Trusted publishing needs npm 11.5.1 or newer; Node 22 bundles an older npm.
+      - name: Update npm for trusted publishing
+        run: npm install -g npm@latest && npm --version
+
+      - name: Publish to npm (trusted publishing, no token)
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Print MCP registry follow-up
         run: |
