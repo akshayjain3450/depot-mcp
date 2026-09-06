@@ -21,4 +21,10 @@ export const RPC = {
   getArtifactDownloadUrl: 'depot.ci.v1.CIService/GetArtifactDownloadURL',
   listSecrets: 'depot.ci.v3beta2.SecretService/ListSecrets',
   listVariables: 'depot.ci.v3beta2.VariableService/ListVariables',
+  getSecret: 'depot.ci.v3beta2.SecretService/GetSecret',
+  getVariable: 'depot.ci.v3beta2.VariableService/GetVariable',
+  setVariableVariant: 'depot.ci.v3beta2.VariableService/SetVariableVariant',
+  deleteVariableVariant: 'depot.ci.v3beta2.VariableService/DeleteVariableVariant',
+  deleteVariable: 'depot.ci.v3beta2.VariableService/DeleteVariable',
+  createProject: 'depot.core.v1.ProjectService/CreateProject',
 } as const;

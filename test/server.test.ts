@@ -37,7 +37,11 @@ describe('server registration', () => {
       [...readOnlyTools.map((tool) => tool.name)].sort(),
     );
     expect(tools).toHaveLength(16);
-    expect(mutatingTools).toHaveLength(0);
+    expect(mutatingTools.map((tool) => tool.name)).toEqual([
+      'depot_set_ci_variable',
+      'depot_delete_ci_variable',
+      'depot_create_project',
+    ]);
   });
 
   it('marks every tool read-only and non-destructive', async () => {
@@ -99,12 +103,19 @@ describe('server registration', () => {
     }
   });
 
-  it('registers no extra tools when DEPOT_MCP_ALLOW_WRITES is enabled, since v1 ships none', async () => {
+  it('registers the mutating tools only when DEPOT_MCP_ALLOW_WRITES is enabled', async () => {
     harness = await createHarness({ routes: {}, config: { allowWrites: true } });
     const { tools } = await harness.client.listTools();
 
-    expect(tools).toHaveLength(readOnlyTools.length);
-    expect(tools.map((tool) => tool.name)).not.toContain('depot_retry_ci_failed_jobs');
+    expect(tools).toHaveLength(readOnlyTools.length + mutatingTools.length);
+    for (const tool of mutatingTools) {
+      const listed = tools.find((entry) => entry.name === tool.name);
+      expect(listed, tool.name).toBeDefined();
+      expect(listed?.annotations?.readOnlyHint, tool.name).toBe(false);
+      expect(typeof listed?.annotations?.destructiveHint, tool.name).toBe('boolean');
+      expect(typeof listed?.annotations?.idempotentHint, tool.name).toBe('boolean');
+      expect(listed?.inputSchema.properties, tool.name).toHaveProperty('dryRun');
+    }
   });
 
   it('registers the diagnostic prompts', async () => {

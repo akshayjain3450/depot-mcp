@@ -6,7 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- First write tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag still sees exactly the 16 read-only tools:
+  - `depot_set_ci_variable` (`SetVariableVariant`): create or overwrite one variant of a CI variable. Refuses a value the redaction rules classify as a credential and a name that already belongs to a secret.
+  - `depot_delete_ci_variable` (`DeleteVariableVariant`, or `DeleteVariable` with `allVariants: true`): delete one variant selected by name or scoping attributes. Refuses a selector matching zero or several variants, and a whole-variable delete unless `allVariants` is set.
+  - `depot_create_project` (`CreateProject`): create a container build project with resolved defaults. Refuses a duplicate name unless `allowDuplicateName` is set and a region other than `us-east-1` or `eu-central-1`. Organization token only.
+- `src/lib/write.ts`: `defineWriteTool`, the shared shape of every write tool. `dryRun` defaults to true and returns a preview plus the exact arguments to resend; preconditions are checked in this server before any mutating RPC; an applied write returns the state before and after and logs one `[depot-mcp write]` line to stderr. Annotations are `readOnlyHint: false`, `openWorldHint: true`, with `destructiveHint` and `idempotentHint` set per tool.
+- `GetVariable` and `GetSecret` by name in the API wrapper, verified live. Variable and secret variants now carry their `id`, and a variant named `name` on the wire (the spelling in Depot's generated bindings) is read as well as `variantName`.
+
+### Changed
+
+- `depot_whoami` no longer reports `mutatingToolsAvailable` (it could only ever be 0); `writesEnabled` stays, and the text says whether the write tools are registered.
+- The startup line on stderr names the registered write tools when `DEPOT_MCP_ALLOW_WRITES` is set, instead of saying the flag has no effect.
+
+### Not verified live
+
+- The three mutating RPCs have never been invoked by this project. Their request field names come from the generated `v3beta2` bindings vendored in Depot's open-source CLI and from `depot/proto`; only the dry-run paths were exercised against Depot.
 
 ## [0.1.1] - 2026-09-06
 

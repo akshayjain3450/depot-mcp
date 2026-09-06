@@ -57,7 +57,7 @@ Deliberately not added: standalone secret and variable getters (the list tools w
 
 ## 0.3: first write tools
 
-Nine tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag never sees them. The registration gate already exists in `src/tools/index.ts`.
+Nine tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag never sees them. The registration gate already exists in `src/tools/index.ts`, and the shared pattern below is `defineWriteTool` in `src/lib/write.ts`. Rows marked "implemented" have shipped with dry-run paths verified live; their mutating RPCs have not been invoked by this project.
 
 Every write tool follows one pattern:
 
@@ -75,9 +75,9 @@ Every write tool follows one pattern:
 | `depot_retry_ci_job` | `RetryJob` | a job that did not fail; the same attempt cap |
 | `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, pointing at the retry tool instead |
 | `depot_dispatch_ci_workflow` | `DispatchWorkflow` | a workflow path with a slash (basename only), an empty ref, a malformed repo, oversized inputs, and optionally anything outside an allowlist. Its description says plainly that this can deploy to production if the workflow does. |
-| `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value (the redaction rules decide), a name that collides with a secret |
-| `depot_delete_ci_variable` | `DeleteVariableVariant` | a whole-variable delete unless asked for; a selector matching zero or many variants |
-| `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region. Organization token only. |
+| `depot_set_ci_variable` (implemented) | `SetVariableVariant` | a credential-shaped value (the redaction rules decide), a name that collides with a secret |
+| `depot_delete_ci_variable` (implemented) | `DeleteVariableVariant` | a whole-variable delete unless asked for; a selector matching zero or many variants |
+| `depot_create_project` (implemented) | `CreateProject` | a duplicate name unless allowed; an unknown region. Organization token only. |
 
 ## Permanently excluded
 

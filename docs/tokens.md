@@ -2,7 +2,7 @@
 
 Depot has three kinds of API token, and they are not interchangeable. This page lists exactly what each one can do through depot-mcp. Everything here was verified live against Depot's API on 2026-09-06 with two tokens from the same organization, one of them a user token belonging to an organization owner.
 
-The short version: **use an Organization token.** It runs every tool. A user token runs the CI tools, the registry tool, and `depot_whoami`, but Depot's project, build, and usage services refuse it no matter what role the user has.
+The short version: **use an Organization token.** It runs every tool, including the opt-in write tools; creating a project needs one. A user token runs the CI tools, the registry tool, and `depot_whoami`, but Depot's project, build, and usage services refuse it no matter what role the user has.
 
 ## By tool
 
@@ -24,6 +24,9 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_list_builds` | yes | **no** |
 | `depot_diagnose_build` | yes | **no** (needs `GetBuild`, which refuses user tokens; the step endpoints themselves accept them) |
 | `depot_get_usage` | yes | **no** |
+| `depot_set_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
+| `depot_delete_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
+| `depot_create_project` (write, opt-in) | yes | **no** (`ProjectService` refuses user tokens; the dry run fails at `ListProjects`) |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 
@@ -62,7 +65,7 @@ Create a dedicated token for this server, named for the person and the purpose (
 ## What no token can do
 
 - **Start a container build.** Depot has no API for it. A build means acquiring a BuildKit endpoint over mTLS and streaming the local build context, which only the `depot` CLI does. This server observes builds; it never starts them.
-- **Restrict a token to read-only.** Depot has no read-only scope. An Organization token that can list runs can also cancel runs and delete projects. This server is read-only because it registers no mutating tool, not because the token is limited. See the [security section of the README](../README.md#read-only-model-and-security).
+- **Restrict a token to read-only.** Depot has no read-only scope. An Organization token that can list runs can also cancel runs and delete projects. This server is read-only by default because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is limited. See the [security section of the README](../README.md#read-only-model-and-security).
 
 ## If your token is the wrong kind
 

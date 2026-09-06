@@ -226,4 +226,65 @@ export class DepotApi {
   listVariables(): Promise<JsonObject> {
     return this.client.call(rpc(VARIABLES, 'ListVariables'), {});
   }
+
+  /**
+   * Verified live on 2026-09-06: the lookup is a oneof of `id` or `name`; a missing variable is
+   * `not_found` "variable 'X' not found", neither field is `invalid_argument`.
+   */
+  getVariable(name: string): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'GetVariable'), { name });
+  }
+
+  /** Same lookup as `getVariable`; verified live the same day ("secret 'X' not found"). */
+  getSecret(name: string): Promise<JsonObject> {
+    return this.client.call(rpc(SECRETS, 'GetSecret'), { name });
+  }
+
+  /**
+   * Mutating. Field names for the three variable writes come from the generated bindings Depot's
+   * open-source CLI vendors (`pkg/proto/depot/ci/v3beta2/variables.pb.go`), not from a live call:
+   * this project has never invoked them. `variantName` defaults to "default" server-side.
+   */
+  setVariableVariant(request: SetVariableVariantRequest): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'SetVariableVariant'), { ...request });
+  }
+
+  /** Mutating. Answers `{deletedVariable: true}` when the last variant went with it. */
+  deleteVariableVariant(variantId: string): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'DeleteVariableVariant'), { variantId });
+  }
+
+  /** Mutating. Removes the variable and every variant; the lookup oneof matches GetVariable. */
+  deleteVariable(lookup: { id: string } | { name: string }): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'DeleteVariable'), { ...lookup });
+  }
+
+  /**
+   * Mutating. Shape from `depot/proto` `CreateProjectRequest`; `hardware` travels as the enum
+   * name (`HARDWARE_16X32`), the spelling Depot itself uses in `ListProjects` responses.
+   */
+  createProject(request: CreateProjectRequest): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'CreateProject'), { ...request });
+  }
+}
+
+export interface VariableAttribute {
+  /** One of repository, environment, branch, workflow. */
+  key: string;
+  value: string;
+}
+
+export interface SetVariableVariantRequest {
+  variableName: string;
+  variantName?: string | undefined;
+  value: string;
+  description?: string | undefined;
+  attributes: VariableAttribute[];
+}
+
+export interface CreateProjectRequest {
+  name: string;
+  regionId: string;
+  cachePolicy?: { keepDays: number; keepGb: number } | undefined;
+  hardware?: string | undefined;
 }

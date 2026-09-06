@@ -14,7 +14,7 @@ Configuration is read from the environment:
   DEPOT_API_URL            API endpoint (default ${DEFAULT_API_URL}); must be https except on localhost.
   DEPOT_MCP_MAX_LOG_PAGES  Log pages read per call (positive integer).
   DEPOT_MCP_OUTPUT_BUDGET  Characters of tool output per call (positive integer).
-  DEPOT_MCP_ALLOW_WRITES   Reserved; this version ships no mutating tools.
+  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the mutating tools; each defaults to dryRun: true.
 
 See the README for the MCP client configuration and the full list of tools.
 `;
@@ -46,7 +46,7 @@ async function main(): Promise<void> {
   );
   if (registration.writesEnabled) {
     console.error(
-      'DEPOT_MCP_ALLOW_WRITES is set, but this version ships no mutating tools, so it has no effect.',
+      `DEPOT_MCP_ALLOW_WRITES is set: registered ${registration.mutating.join(', ')}. Every write defaults to dryRun: true; applied writes are logged here.`,
     );
   }
 

@@ -4,7 +4,7 @@ import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
 
-const projectSchema = z.object({
+export const projectSchema = z.object({
   projectId: z.string().optional(),
   name: z.string().optional(),
   organizationId: z.string().optional(),
@@ -17,7 +17,7 @@ const projectSchema = z.object({
   }),
 });
 
-function describeProject(project: z.infer<typeof projectSchema>): string {
+export function describeProject(project: z.infer<typeof projectSchema>): string {
   const cache = [
     project.cachePolicy.keepGb === undefined ? undefined : `${project.cachePolicy.keepGb} GB`,
     project.cachePolicy.keepDays === undefined ? undefined : `${project.cachePolicy.keepDays} days`,

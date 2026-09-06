@@ -52,7 +52,7 @@ The flagship tool is a thin, careful wrapper around something Depot already buil
 | Needs the `depot` CLI installed and logged in | yes | no |
 | Works in clients without `SKILL.md` support | no | yes |
 | Invocation | agent must retrieve the skill | tool is listed in `tools/list` |
-| Can mutate Depot (rerun, cancel, reset) | yes, anything the CLI can | no tool can |
+| Can mutate Depot (rerun, cancel, reset) | yes, anything the CLI can | three opt-in write tools behind `DEPOT_MCP_ALLOW_WRITES`, dry-run by default; no rerun, cancel, or reset |
 | Output bounded for a context window | depends on the CLI command | every tool |
 | Maintained by | Depot | community |
 
@@ -60,7 +60,7 @@ As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise
 
 ## Status
 
-- **Read-only.** v1 registers no tool that can change anything. There is no retry, cancel, rerun, dispatch, delete, or token-minting tool.
+- **Read-only by default.** Without `DEPOT_MCP_ALLOW_WRITES` no registered tool can change anything. With it, three write tools appear (set or delete a CI variable, create a project), each previewing by default and refusing unsafe requests before any write. There is still no retry, cancel, rerun, dispatch, or token-minting tool.
 - **Depot CI is beta**, per Depot's own documentation. The CI tools are the most valuable ones here and also the most likely to shift under you.
 - **Verified against a real Depot organization on 2026-09-06.** Every tool was run live with both token kinds, and `depot_diagnose_build` against a real failed build. The one tool not yet exercised against real data is `depot_diagnose_ci_failure`, because the test organization had no Depot CI runs; its request shape was verified against Depot (an unknown id returns Depot's own `not_found`), and its response parsing is covered by fixtures taken from Depot's CLI documentation.
 - **MCP protocol revision `2025-11-25`.** This server is built on the `@modelcontextprotocol/sdk` 1.x line, which speaks `2025-11-25`. The current spec revision is `2026-07-28`, implemented by the v2 packages (`@modelcontextprotocol/server` 2.0.0, published 2026-07-28), which also serve `2025-11-25` clients. Every current client negotiates `2025-11-25`, so nothing is lost today. Moving to v2 is a planned, contained change: the SDK is imported in nine files and the transport wiring lives in `src/index.ts`.
@@ -397,7 +397,7 @@ Every setting is an environment variable, set in your client's config.
 | `DEPOT_API_URL` | no | `https://api.depot.dev` | Override the API endpoint. Must be `https://`; plain `http://` is accepted only for localhost, for running against a stub. |
 | `DEPOT_MCP_MAX_LOG_PAGES` | no | `20` | Cap on log/step pages fetched per tool call, so one call can't walk a gigabyte of logs. |
 | `DEPOT_MCP_OUTPUT_BUDGET` | no | `24000` | Hard character ceiling on any single tool result. |
-| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing; `depot_whoami` will say so. |
+| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the [write tools](#write-tools-opt-in). Every one defaults to `dryRun: true`; a client without the flag never sees them. The startup line on stderr and `depot_whoami` both say whether writes are on. |
 
 Each Depot API call has an overall deadline of about 40 seconds, with a bounded number of retries (exponential backoff) for `unavailable`, `deadline_exceeded`, `aborted`, and 429 responses. `invalid_argument`, `not_found`, `permission_denied`, and `failed_precondition` are never retried. A tool that makes several calls (log paging, build diagnosis) can therefore take longer than one deadline; it reports partial results rather than failing outright when a later page times out.
 
@@ -407,7 +407,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 16 default tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. The three opt-in write tools carry `readOnlyHint: false` and honest `destructiveHint` and `idempotentHint` values. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -440,6 +440,18 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | `depot_list_images` | What is in this project's registry, with digests and sizes? |
 | `depot_get_usage` | What is driving spend? Build minutes, minutes saved by cache, GitHub Actions runner minutes, storage, sandboxes. Dates are UTC; a date-only `endAt` includes that whole day. |
 
+### Write tools (opt-in)
+
+Registered only when `DEPOT_MCP_ALLOW_WRITES=1`. Every write tool works the same way: `dryRun` defaults to `true`, so a call that omits it reads the current state with the matching read RPC, returns a preview and the exact arguments to resend with `dryRun: false`, and changes nothing. Preconditions are checked in this server before any mutating RPC, so the model gets a reason rather than Depot's `412`. An applied write returns the state before and after, and logs one line to stderr: `[depot-mcp write] <tool> <ids> <time>`.
+
+| Tool | Does | Refuses | Annotations |
+| --- | --- | --- | --- |
+| `depot_set_ci_variable` | Create or overwrite one variant of a CI variable (`SetVariableVariant`), with optional `repository`, `environment`, `branch`, `workflow` scoping. The preview shows the variant that would be overwritten and its current value. | A value the redaction rules classify as a credential (store it as a Depot secret instead), and a name that already belongs to a CI secret. | not destructive, idempotent |
+| `depot_delete_ci_variable` | Delete one variant selected by `variantName` or scoping attributes (`DeleteVariableVariant`), or the whole variable with `allVariants: true` (`DeleteVariable`). The preview lists every variant with its value, redacted where credential-shaped. | A name Depot does not have; a selector matching zero or several variants; a whole-variable delete without `allVariants`; `allVariants` combined with a selector. | **destructive**, idempotent |
+| `depot_create_project` | Create a container build project (`CreateProject`) with `regionId` (default `us-east-1`), optional `hardware` (`8x16`, `16x32`, ...) and cache policy. The preview resolves every default and lists projects that already carry the name. Organization token only. | A duplicate name unless `allowDuplicateName: true`; a region other than `us-east-1` or `eu-central-1`. | not destructive, **not idempotent** |
+
+The request field names for these three RPCs come from the generated `v3beta2` bindings vendored in Depot's open-source CLI and from `depot/proto`; only the dry-run paths have been exercised against Depot by this project. Depot has no read-only token scope, so this flag is the only thing standing between a model and a write; leave it unset unless the client is one you trust to confirm `dryRun: false` calls.
+
 ### Prompts
 
 Two prompts chain these into common workflows: `diagnose-latest-failure` (find the last failed run, diagnose it, propose a fix) and `explain-build-slowness` (builds plus usage: is it cache misses or more work?).
@@ -456,7 +468,7 @@ Every tool caps its own output and tells the agent when it truncated:
 
 **Read the first point carefully.**
 
-- **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary**: it is read-only because it defines no mutating tool, not because the token is restricted. Treat `readOnlyHint` as a hint to the client, not as enforcement.
+- **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary**: it is read-only by default because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is restricted. The three write tools that flag enables preview by default and refuse unsafe requests server-side, but a `dryRun: false` call does change Depot. Treat `readOnlyHint` as a hint to the client, not as enforcement.
 - **Some operations are permanently out of scope**, not merely deferred: `ProjectService/ResetProject` (deletes all cached data; a plausible-sounding "fix" with an irreversible, invisible, expensive blast radius), `CIService/Run` (executes arbitrary workflow content on your infrastructure), token and secret writes (`CreateToken` returns the secret, which would land in a transcript), image and tag deletion, and `ShareBuild` (creates a public URL; data exposure disguised as a read).
 - **The token is never logged, echoed, or written to disk.** It is read from the environment only, never printed in errors or in `depot_whoami`. Error messages from the transport layer and from Depot's own error envelopes are scrubbed of the token before they reach the model, in case a misconfigured endpoint echoes request headers. This server does not read `~/.config/depot/depot.yaml`, so it cannot pick up ambient credentials you did not intend to give it.
 - **CI variable values are scrubbed.** Depot withholds secret *values* server-side, but returns *variable* values verbatim, and variables get misused as secret storage. Values whose name or content looks like a credential are replaced with a placeholder, and the result reports which rule fired so you still know the variable exists.
@@ -555,6 +567,7 @@ src/
     ci-tree.ts      run -> workflow -> job -> attempt parsing
     ci-target.ts    loose identifier resolution
     redact.ts       credential scrubbing
+    write.ts        the dryRun / preview / refuse / apply shape of every write tool
     build.ts  project.ts  resolve.ts  time.ts
   tools/            one module per tool group; index.ts holds the write gate
 test/               vitest: unit, tool round-trips over InMemoryTransport, fixtures

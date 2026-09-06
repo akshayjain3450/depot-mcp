@@ -27,7 +27,8 @@ describe('depot_whoami', () => {
     expect(result.structured.orgSelection).toContain('exactly one organization');
     expect(result.structured.projectCount).toBe(2);
     expect(result.structured.writesEnabled).toBe(false);
-    expect(result.structured.mutatingToolsAvailable).toBe(0);
+    expect(result.structured).not.toHaveProperty('mutatingToolsAvailable');
+    expect(result.text).toContain('Writes: disabled');
     expect(result.text).toContain('Acme Engineering');
     expect(result.text).toContain('<- active');
   });
@@ -173,8 +174,8 @@ describe('depot_whoami', () => {
     const result = await callTool(harness, 'depot_whoami', {});
 
     expect(result.structured.writesEnabled).toBe(true);
-    expect(result.structured.mutatingToolsAvailable).toBe(0);
-    expect(JSON.stringify(result.structured.warnings)).toContain('no effect');
+    expect(JSON.stringify(result.structured.warnings)).toContain('dryRun: true');
+    expect(result.text).toContain('Writes: enabled');
   });
 
   it('explains a token that authenticates but sees nothing', async () => {

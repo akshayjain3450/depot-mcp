@@ -8,9 +8,8 @@ export interface DepotMcpConfig {
   readonly orgId: string | undefined;
   readonly projectId: string | undefined;
   /**
-   * Gate for mutating tools. v1 registers no mutating tools at all, so this currently only
-   * controls whether the (empty) write tool set is offered — the wiring exists so a future
-   * version can add them without reworking registration.
+   * Gate for mutating tools: the `mutatingTools` list in src/tools/index.ts is registered only
+   * when this is set. Depot has no read-only token scope, so this flag is the safety boundary.
    */
   readonly allowWrites: boolean;
   readonly maxLogPages: number;
