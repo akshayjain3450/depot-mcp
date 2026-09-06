@@ -24,6 +24,10 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_list_builds` | yes | **no** |
 | `depot_diagnose_build` | yes | **no** (needs `GetBuild`, which refuses user tokens; the step endpoints themselves accept them) |
 | `depot_get_usage` | yes | **no** |
+| `depot_audit_trust_policies` | yes | **no** (same `ProjectService` calls as `depot_get_project`) |
+| `depot_list_project_tokens` | yes | **no** (`ProjectService`) |
+| `depot_list_project_usage` | yes | **no** (`UsageService`) |
+| `depot_get_cache_summary` | yes | **no** (projects, builds, and usage) |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 

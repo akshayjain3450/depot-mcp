@@ -81,7 +81,7 @@ Depot has three kinds of token and they are not interchangeable. Verified live o
 | Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
 | `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
 | `depot_list_images` | yes | yes |
-| `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
+| `depot_list_projects`, `depot_get_project`, `depot_audit_trust_policies`, `depot_list_project_tokens`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage`, `depot_list_project_usage`, `depot_get_cache_summary` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
 | Project token | runs nothing | |
 
 The full matrix, per tool and per Depot service, with how to obtain each token, is in [docs/tokens.md](./docs/tokens.md). `depot_whoami` reports which kind it holds and names the tools that will not work.
@@ -407,7 +407,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 20 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -437,8 +437,12 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | `depot_list_builds` | Recent container builds with duration and cache hit ratio. |
 | `depot_list_projects` | Which build projects exist, in which region, on what hardware, with which cache policy? Accepts `pageToken`. |
 | `depot_get_project` | One project's full config plus its OIDC trust policies. |
+| `depot_audit_trust_policies` | Which external CI identities (GitHub repository, Buildkite pipeline, CircleCI or GitLab project) can build into which project, organization-wide? One project with `projectId`, otherwise the first 50. No policies is a normal answer. |
+| `depot_list_project_tokens` | Which project tokens exist for a project: id, description, timestamps when Depot has them. **Never the secret**; Depot reveals it once at creation and this server never creates tokens. |
 | `depot_list_images` | What is in this project's registry, with digests and sizes? |
 | `depot_get_usage` | What is driving spend? Build minutes, minutes saved by cache, GitHub Actions runner minutes, storage, sandboxes. Dates are UTC; a date-only `endAt` includes that whole day. |
+| `depot_list_project_usage` | Every project's build count, build time, and layer cache size for a period, largest cache first, with names resolved. Accepts `pageToken`. |
+| `depot_get_cache_summary` | Is this project's cache working? Retention policy against current size, hit ratio over recent builds, minutes saved, and observations (near the size limit, low hit ratio, builds rarer than retention). Depot cannot list cache entries and this server never resets a cache; the tool says both. |
 
 ### Prompts
 

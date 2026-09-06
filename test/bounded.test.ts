@@ -237,6 +237,32 @@ const GIANT_CASES: readonly GiantCase[] = [
     saysTruncated: TRUNCATED_FOOTER,
   },
   {
+    name: 'depot_audit_trust_policies',
+    args: {},
+    routes: {
+      [RPC.listProjects]: ok({
+        projects: many(50, (i) => ({ projectId: `proj_${i}`, name: `project-${i}` })),
+      }),
+      [RPC.listTrustPolicies]: ok({
+        trustPolicies: many(20, (i) => ({
+          trustPolicyId: `tp_${i}`,
+          github: { repositoryOwner: 'acme', repository: `repo-${i}-${'r'.repeat(40)}` },
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_project_tokens',
+    args: { projectId: 'proj_api7f2' },
+    routes: {
+      [RPC.listTokens]: ok({
+        tokens: many(500, (i) => ({ tokenId: `tok_${i}`, description: `token ${filler(i)}` })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
     name: 'depot_get_usage',
     args: {},
     routes: {
@@ -248,6 +274,45 @@ const GIANT_CASES: readonly GiantCase[] = [
           minutesSaved: 20,
         })),
       }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_project_usage',
+    args: {},
+    routes: {
+      [RPC.listProjectUsage]: ok({
+        usage: many(500, (i) => ({
+          projectId: `proj_${i}`,
+          buildCount: i,
+          buildDurationSeconds: 60 * i,
+          layerCacheSizeGb: i,
+        })),
+      }),
+      [RPC.listProjects]: ok({
+        projects: many(500, (i) => ({ projectId: `proj_${i}`, name: `project-${filler(i)}` })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // The summary is a fixed number of lines, so the only thing Depot can inflate is the text
+    // inside them: a huge project name lands in the first line and every observation.
+    name: 'depot_get_cache_summary',
+    args: { projectId: 'proj_giant' },
+    routes: {
+      [RPC.getProject]: ok({
+        project: {
+          projectId: 'proj_giant',
+          name: `giant ${'n'.repeat(3_000)}`,
+          cachePolicy: { keepDays: 14, keepGb: 50 },
+        },
+      }),
+      [RPC.listProjectUsage]: ok({
+        usage: [{ projectId: 'proj_giant', buildCount: 3, buildDurationSeconds: 90, layerCacheSizeGb: 49 }],
+      }),
+      [RPC.listBuilds]: ok(fixture('builds-list')),
+      [RPC.getUsage]: ok({ containerBuild: [] }),
     },
     saysTruncated: TRUNCATED_FOOTER,
   },

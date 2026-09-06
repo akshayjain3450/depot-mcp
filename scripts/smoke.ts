@@ -14,8 +14,9 @@ import { readNumber, readObjectArray, readString, type JsonObject } from '../src
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
 import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
-import { parseProject } from '../src/lib/project.js';
+import { describeTrustIdentity, parseProject, parseTrustPolicy } from '../src/lib/project.js';
 import { daysAgoRfc3339 } from '../src/lib/time.js';
+import { parseProjectUsage } from '../src/lib/usage.js';
 import { ORGANIZATION_TOKEN_NOTE, USER_TOKEN_WARNING } from '../src/tools/whoami.js';
 
 type Status = 'ok' | 'failed' | 'skipped';
@@ -148,6 +149,33 @@ async function main(): Promise<void> {
       const images = readObjectArray(await api.listImages({ projectId, pageSize: 10 }), 'images');
       return { detail: `${images.length} registry image(s) in ${projectId}` };
     });
+
+    await attempt('ListTrustPolicies', async () => {
+      const policies = readObjectArray(await api.listTrustPolicies(projectId), 'trustPolicies').map(
+        parseTrustPolicy,
+      );
+      for (const policy of policies.slice(0, 5)) {
+        console.log(`         - ${describeTrustIdentity(policy)}`);
+      }
+      return { detail: `${policies.length} OIDC trust policy(ies) on ${projectId}` };
+    });
+
+    await attempt('ListTokens', async () => {
+      const response = await api.listTokens(projectId);
+      const tokens = readObjectArray(response, 'tokens');
+      // Only ids and descriptions are printed; every other field name is reported, never its value.
+      const fieldNames = new Set(tokens.flatMap((token) => Object.keys(token)));
+      for (const token of tokens.slice(0, 5)) {
+        console.log(
+          `         - ${readString(token, 'tokenId', 'id') ?? '?'} ${JSON.stringify(readString(token, 'description') ?? '')}`,
+        );
+      }
+      const unexpected = [...fieldNames].filter((name) => !['tokenId', 'description'].includes(name));
+      if (unexpected.length > 0) {
+        console.log(`         ! fields beyond tokenId/description present (values not shown): ${unexpected.join(', ')}`);
+      }
+      return { detail: `${tokens.length} project token(s) on ${projectId}, metadata only` };
+    });
   }
 
   if (failedBuildId === undefined || firstProjectId === undefined) {
@@ -270,6 +298,19 @@ async function main(): Promise<void> {
     return {
       detail: `${builds.length} build row(s), ${runners.length} runner repo(s), ${storage.length} storage row(s), ${savedMinutes} min saved by cache in 7 days`,
     };
+  });
+
+  await attempt('ListProjectUsage', async () => {
+    const rows = readObjectArray(
+      await api.listProjectUsage({ startAt: daysAgoRfc3339(30), endAt: new Date().toISOString() }),
+      'usage',
+    ).map(parseProjectUsage);
+    for (const row of rows.slice(0, 5)) {
+      console.log(
+        `         - ${row.projectId ?? '?'} ${row.buildCount ?? 0} build(s), ${row.buildDurationSeconds ?? 0}s, cache ${row.layerCacheSizeGb ?? 0} GB`,
+      );
+    }
+    return { detail: `${rows.length} project usage row(s) in 30 days` };
   });
 
   summarise();

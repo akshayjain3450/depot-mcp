@@ -34,7 +34,7 @@ Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
 
 ## 0.2: read additions
 
-Twelve always-on tools, ordered by value.
+Twelve always-on tools, ordered by value. Rows marked **shipped** are in the current `Unreleased` changelog section.
 
 | Tool | Depot RPCs | What it answers |
 | --- | --- | --- |
@@ -44,12 +44,12 @@ Twelve always-on tools, ordered by value.
 | `depot_get_ci_workflow` | `GetWorkflow` | Execution history including rerun and retry lineage. Prerequisite for the 0.3 rerun previews. |
 | `depot_wait_for_ci_run` | `GetRunStatus`, polled | Waits up to a bounded timeout for a run to finish, reporting which nodes changed. Polls the unary RPC only; never the streaming ones. |
 | `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` | A short-lived signed download URL for one artifact, never logged. |
-| `depot_list_project_usage` | `ListProjectUsage` | Every project's build count, build seconds, and layer cache size in one call. Organization token only. |
-| `depot_get_cache_summary` | `GetProject`, `ListProjectUsage`, `ListBuilds`, `GetUsage` | Cache policy versus current cache size, hit ratio over recent builds, minutes saved. Entry-level listing is impossible; the tool says so. |
+| `depot_list_project_usage` (**shipped**) | `ListProjectUsage`, `ListProjects` for names | Every project's build count, build seconds, and layer cache size in one call. Organization token only. |
+| `depot_get_cache_summary` (**shipped**) | `GetProject`, `ListProjectUsage`, `ListBuilds`, `GetUsage` | Cache policy versus current cache size, hit ratio over recent builds, minutes saved. Entry-level listing is impossible; the tool says so. |
 | `depot_compare_ci_runs` | `GetRunStatus`, `GetRunMetrics`, `GetFailureDiagnosis` | Job status, duration, and peak memory deltas between two runs, plus failures new in one of them. Ship as a prompt first. |
 | `depot_get_build` | `GetBuild` | One build's status, timing, and cache counters. The build-side wait primitive. |
-| `depot_list_project_tokens` | `ListTokens` | Credential inventory: id, description, created. Must be verified live to return no secret material before shipping. |
-| `depot_audit_trust_policies` | `ListProjects`, `ListTrustPolicies` | Which external CI identities can build into which project, organization-wide. |
+| `depot_list_project_tokens` (**shipped**) | `ListTokens` | Credential inventory: id and description (depot/proto defines nothing else on the list response; the secret only exists in `CreateToken`'s reply). Verified live 2026-09-06; the tool allowlists its output fields so a future field cannot leak by default. |
+| `depot_audit_trust_policies` (**shipped**) | `ListProjects`, `ListTrustPolicies` | Which external CI identities can build into which project, organization-wide. |
 
 Five more behind a beta flag until verified live with both token kinds, because their APIs are private beta or documented only in protos: `depot_list_sandboxes`, `depot_get_sandbox` (`depot.sandbox.v1`), `depot_list_registry_repositories`, `depot_get_registry_image` (`depot.registry.v1beta1`), and `depot_list_test_results` (only reachable by shelling out to `depot tests --output json`, so it also needs the CLI).
 
@@ -107,7 +107,7 @@ Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagn
 | | Tools | Prompts | Resources |
 | --- | --- | --- | --- |
 | Today (0.1) | 16 | 2 | 0 |
-| 0.2 reads, always on | +12 | +5 | +4 |
+| 0.2 reads, always on (4 of 12 shipped) | +12 | +5 | +4 |
 | 0.2 reads, beta-gated | +5 | | |
 | 0.3 writes, flag-gated | +9 | | |
 | End of roadmap | 42 | 7 | 4 |

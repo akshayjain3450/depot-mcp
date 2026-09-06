@@ -1,5 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolContext, ToolModule } from '../lib/tool.js';
+import { auditTrustPoliciesTool, listProjectTokensTool } from './access.js';
+import { getCacheSummaryTool } from './cache.js';
 import { listCiArtifactsTool } from './ci-artifacts.js';
 import { listCiSecretsTool, listCiVariablesTool } from './ci-config.js';
 import { diagnoseCiFailureTool } from './ci-diagnose.js';
@@ -10,7 +12,7 @@ import { getCiJobSummaryTool } from './ci-summary.js';
 import { diagnoseBuildTool, listBuildsTool } from './builds.js';
 import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
-import { getUsageTool } from './usage.js';
+import { getUsageTool, listProjectUsageTool } from './usage.js';
 import { whoamiTool } from './whoami.js';
 
 export const readOnlyTools: readonly ToolModule[] = [
@@ -26,7 +28,11 @@ export const readOnlyTools: readonly ToolModule[] = [
   listBuildsTool,
   listProjectsTool,
   getProjectTool,
+  auditTrustPoliciesTool,
+  listProjectTokensTool,
   getUsageTool,
+  listProjectUsageTool,
+  getCacheSummaryTool,
   listImagesTool,
   listCiSecretsTool,
   listCiVariablesTool,

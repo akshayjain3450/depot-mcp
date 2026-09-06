@@ -97,9 +97,44 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     },
   },
   {
+    name: 'depot_audit_trust_policies',
+    args: {},
+    routes: {
+      [RPC.listProjects]: ok(fixture('projects')),
+      [RPC.listTrustPolicies]: ok({
+        trustPolicies: [{ trustPolicyId: 'tp_1', github: { repositoryOwner: 'acme', repository: 'api' } }],
+      }),
+    },
+  },
+  {
+    name: 'depot_list_project_tokens',
+    args: { projectId: 'proj_api7f2' },
+    routes: { [RPC.listTokens]: ok(fixture('project-tokens')) },
+  },
+  {
     name: 'depot_get_usage',
     args: {},
     routes: { [RPC.getUsage]: ok(fixture('usage')) },
+  },
+  {
+    name: 'depot_list_project_usage',
+    args: {},
+    routes: {
+      [RPC.listProjectUsage]: ok(fixture('project-usage')),
+      [RPC.listProjects]: ok(fixture('projects')),
+    },
+  },
+  {
+    name: 'depot_get_cache_summary',
+    args: { projectId: 'proj_api7f2' },
+    routes: {
+      [RPC.getProject]: ok({
+        project: { projectId: 'proj_api7f2', name: 'api', cachePolicy: { keepDays: 14, keepGb: 50 } },
+      }),
+      [RPC.listProjectUsage]: ok(fixture('project-usage')),
+      [RPC.listBuilds]: ok(fixture('builds-list')),
+      [RPC.getUsage]: ok(fixture('usage')),
+    },
   },
   {
     name: 'depot_list_images',

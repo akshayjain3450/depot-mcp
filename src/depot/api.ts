@@ -116,6 +116,15 @@ export class DepotApi {
     return this.client.call(rpc(CORE_PROJECT, 'ListTrustPolicies'), { projectId });
   }
 
+  /**
+   * Per depot/proto, ListTokensResponse.Token carries only token_id and description; the secret
+   * exists solely in CreateToken's response, which this server never calls. Verified live
+   * 2026-09-06 (an organization without project tokens answers `{}`).
+   */
+  listTokens(projectId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'ListTokens'), { projectId });
+  }
+
   listBuilds(request: {
     projectId: string;
     pageSize?: number | undefined;
@@ -163,6 +172,12 @@ export class DepotApi {
 
   getProjectUsage(request: UsageWindow & { projectId: string }): Promise<JsonObject> {
     return this.client.call(rpc(CORE_USAGE, 'GetProjectUsage'), { ...request });
+  }
+
+  listProjectUsage(
+    request: UsageWindow & { pageSize?: number | undefined; pageToken?: string | undefined },
+  ): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_USAGE, 'ListProjectUsage'), { ...request });
   }
 
   listRuns(request: ListRunsRequest): Promise<JsonObject> {

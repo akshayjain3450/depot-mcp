@@ -6,7 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Four read-only tools (20 in total), all `readOnlyHint: true`, `destructiveHint: false`:
+  - `depot_list_project_usage`: every project's build count, build time, and layer cache size for a window, largest cache first, with names from one `ListProjects` call; accepts `pageToken`.
+  - `depot_get_cache_summary`: one project's cache policy against its current size, hit ratio over the last N builds, minutes saved, and observations (near the size limit, low hit ratio, builds arriving less often than retention keeps layers). States that Depot cannot list cache entries and that this server does not reset caches.
+  - `depot_audit_trust_policies`: OIDC trust policies across up to 50 projects, with a map of external identity to projects. A per-project refusal is recorded, not fatal.
+  - `depot_list_project_tokens`: project token inventory, metadata only. Output fields are allowlisted (`tokenId`, `description`, timestamps); a test asserts that `secret`, `token`, `value`, and `hash` fields in a response never reach the client. Verified live 2026-09-06: Depot's list response carries only `tokenId` and `description`.
+- `scripts/smoke.ts` exercises `ListProjectUsage`, `ListTrustPolicies` and `ListTokens`.
+
+### Fixed
+
+- `depot_get_usage` with `projectId` reported every number as unknown: Depot nests `GetProjectUsage`'s record under `usage` (per its proto; observed live). It now reads the nested record.
 
 ## [0.1.1] - 2026-09-06
 
