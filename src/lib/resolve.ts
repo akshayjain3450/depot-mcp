@@ -5,7 +5,10 @@ export const CI_TARGET_TYPES = ['run', 'workflow', 'job', 'attempt'] as const;
 export type CiTargetType = (typeof CI_TARGET_TYPES)[number];
 
 const TARGET_PREFIXES: ReadonlyArray<readonly [RegExp, CiTargetType]> = [
-  [/^run[_-]/i, 'run'],
+  // Depot's real ids are bare 10-character strings (jlj6ll9tdm); push-triggered runs carry a
+  // `ps_` prefix (ps_st95t8cmg1, observed live 2026-09-06). The named prefixes are kept for
+  // callers that hand over CLI-style or documentation-style ids.
+  [/^(?:run|ps)[_-]/i, 'run'],
   [/^(?:wf|workflow)[_-]/i, 'workflow'],
   [/^job[_-]/i, 'job'],
   [/^(?:att|attempt)[_-]/i, 'attempt'],
