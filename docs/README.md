@@ -4,6 +4,7 @@ Design notes and distribution details for depot-mcp. The README covers installat
 
 ## Reference
 
+- [`roadmap.md`](./roadmap.md): the 16 tools of today, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
 - [`tokens.md`](./tokens.md): which Depot token kind can call which tool and which Depot service, verified live, and how to obtain each.
 
 ## Design and research
