@@ -20,6 +20,7 @@ const LINE_OVERHEAD_CHARS = 24;
 
 interface LogLine {
   readonly stepKey: string | undefined;
+  readonly stepName: string | undefined;
   readonly stream: string | undefined;
   readonly lineNumber: number | undefined;
   readonly timestamp: string | undefined;
@@ -27,11 +28,22 @@ interface LogLine {
   readonly bodyTruncated?: true;
 }
 
+// CSI and OSC escape sequences (colours, cursor moves, hyperlinks). Linear: one bounded run each.
+const ANSI_ESCAPES = /\u001b\[[0-9;?]{0,32}[ -/]*[@-~]|\u001b\][^\u0007\u001b]{0,512}(?:\u0007|\u001b\\)/g;
+
+export function stripAnsi(value: string): string {
+  return value.replace(ANSI_ESCAPES, '');
+}
+
 function parseLine(source: JsonObject): LogLine {
   const timestampMs = readNumber(source, 'timestampMs');
-  const body = truncateText(readString(source, 'body', 'content', 'message') ?? '', MAX_LOG_LINE_CHARS);
+  const body = truncateText(
+    stripAnsi(readString(source, 'body', 'content', 'message') ?? ''),
+    MAX_LOG_LINE_CHARS,
+  );
   return {
     stepKey: readString(source, 'stepKey', 'stepId'),
+    stepName: readString(source, 'stepName'),
     stream: readEnum(source, ['stream'], ['stream', 'log_stream']),
     lineNumber: readNumber(source, 'lineNumber'),
     timestamp: timestampMs === undefined ? undefined : new Date(timestampMs).toISOString(),
@@ -222,6 +234,7 @@ async function collectForward(
 
 const logLineSchema = z.object({
   stepKey: z.string().optional(),
+  stepName: z.string().optional(),
   stream: z.string().optional(),
   lineNumber: z.number().optional(),
   timestamp: z.string().optional(),
@@ -375,7 +388,11 @@ Paging contract:
     for (const line of kept) {
       const prefix = [
         input.includeTimestamps ? line.timestamp : undefined,
-        line.stepKey === undefined ? undefined : `[${line.stepKey}]`,
+        line.stepName !== undefined
+          ? `[${line.stepName}]`
+          : line.stepKey === undefined
+            ? undefined
+            : `[${line.stepKey}]`,
         line.stream === 'stderr' ? '(stderr)' : undefined,
       ]
         .filter((part): part is string => part !== undefined)

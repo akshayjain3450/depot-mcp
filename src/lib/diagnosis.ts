@@ -13,6 +13,29 @@ import { DIAGNOSIS_TARGET_TYPE_NAMES } from '../depot/api.js';
 import { truncateText } from './budget.js';
 import { STATUS_PREFIXES } from './ci-tree.js';
 
+/**
+ * Enum prefixes as Depot actually emits them (verified live 2026-09-06): the diagnosis document
+ * uses FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES, FAILURE_DIAGNOSIS_TARGET_TYPE_RUN,
+ * FAILURE_DIAGNOSIS_RESOURCE_STATUS_FAILED, FAILURE_DIAGNOSIS_CONCLUSION_FAILURE and
+ * DRILL_DOWN_COMMAND_KIND_LOGS, while the CLI's JSON output (which the fixtures follow) uses the
+ * short forms. Longest prefixes first so the specific ones win.
+ */
+const DIAGNOSIS_STATE_PREFIXES = ['failure_diagnosis_state', 'diagnosis_state', 'state'];
+const DIAGNOSIS_EMPTY_REASON_PREFIXES = ['failure_diagnosis_empty_reason', 'empty_reason'];
+const DIAGNOSIS_TARGET_TYPE_PREFIXES = ['failure_diagnosis_target_type', 'target_type'];
+const DIAGNOSIS_STATUS_PREFIXES = [
+  'failure_diagnosis_resource_status',
+  'failure_diagnosis_status',
+  ...STATUS_PREFIXES,
+];
+const DIAGNOSIS_CONCLUSION_PREFIXES = [
+  'failure_diagnosis_conclusion',
+  'attempt_conclusion',
+  'job_conclusion',
+  'conclusion',
+];
+const NEXT_COMMAND_KIND_PREFIXES = ['drill_down_command_kind', 'next_command_kind', 'kind'];
+
 /** Depot's CLI appends this whenever a diagnosis or suggested fix is present; keep it verbatim. */
 export const AI_DISCLOSURE = 'This diagnosis is AI-generated and can make mistakes.';
 
@@ -150,7 +173,7 @@ const NEXT_COMMAND_TOOLS: Readonly<
 };
 
 function parseNextStep(source: JsonObject): NextStep | undefined {
-  const kind = readEnum(source, ['kind'], ['next_command_kind', 'kind']);
+  const kind = readEnum(source, ['kind'], NEXT_COMMAND_KIND_PREFIXES);
   if (kind === undefined) {
     return undefined;
   }
@@ -202,8 +225,8 @@ function parseAttempt(source: JsonObject, limits: DiagnosisLimits): AttemptRef {
     jobId: readString(source, 'jobId'),
     jobKey: readString(source, 'jobKey', 'jobDisplayName'),
     attempt: readNumber(source, 'attempt'),
-    attemptStatus: readEnum(source, ['attemptStatus'], ['status', 'attempt_status']),
-    attemptConclusion: readEnum(source, ['attemptConclusion'], ['conclusion', 'attempt_conclusion']),
+    attemptStatus: readEnum(source, ['attemptStatus'], DIAGNOSIS_STATUS_PREFIXES),
+    attemptConclusion: readEnum(source, ['attemptConclusion'], DIAGNOSIS_CONCLUSION_PREFIXES),
     errorMessage: capString(errorMessage, ERROR_MESSAGE_CHAR_LIMIT),
     diagnosis: capString(readString(source, 'diagnosis'), DIAGNOSIS_CHAR_LIMIT),
     possibleFix: capString(readString(source, 'possibleFix'), POSSIBLE_FIX_CHAR_LIMIT),
@@ -239,19 +262,19 @@ function parseContext(source: JsonObject | undefined): DiagnosisContext {
     sha: readString(source, 'sha', 'headSha'),
     trigger: readString(source, 'trigger'),
     runId: readString(source, 'runId'),
-    runStatus: readEnum(source, ['runStatus'], ['status', 'run_status']),
+    runStatus: readEnum(source, ['runStatus'], DIAGNOSIS_STATUS_PREFIXES),
     workflowId: readString(source, 'workflowId'),
     workflowName: readString(source, 'workflowName'),
     workflowPath: readString(source, 'workflowPath'),
-    workflowStatus: readEnum(source, ['workflowStatus'], ['status', 'workflow_status']),
+    workflowStatus: readEnum(source, ['workflowStatus'], DIAGNOSIS_STATUS_PREFIXES),
     jobId: readString(source, 'jobId'),
     jobKey: readString(source, 'jobKey'),
     jobDisplayName: readString(source, 'jobDisplayName'),
-    jobStatus: readEnum(source, ['jobStatus'], ['status', 'job_status']),
-    jobConclusion: readEnum(source, ['jobConclusion'], ['conclusion', 'job_conclusion']),
+    jobStatus: readEnum(source, ['jobStatus'], DIAGNOSIS_STATUS_PREFIXES),
+    jobConclusion: readEnum(source, ['jobConclusion'], DIAGNOSIS_CONCLUSION_PREFIXES),
     attemptId: readString(source, 'attemptId'),
     attempt: readNumber(source, 'attempt'),
-    attemptStatus: readEnum(source, ['attemptStatus'], ['status', 'attempt_status']),
+    attemptStatus: readEnum(source, ['attemptStatus'], DIAGNOSIS_STATUS_PREFIXES),
     truncatedContextFields: readStringArray(source, 'truncatedContextFields'),
   };
 }
@@ -318,22 +341,22 @@ export function parseDiagnosis(response: JsonObject, limits: DiagnosisLimits): D
 
   const narrowerTargets: NarrowerTarget[] = readObjectArray(response, 'overLimitBreakdown').map(
     (entry) => ({
-      targetType: mapEnumNumber(entry, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, ['target_type']),
+      targetType: mapEnumNumber(entry, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, DIAGNOSIS_TARGET_TYPE_PREFIXES),
       targetId: readString(entry, 'targetId'),
       label: capString(readString(entry, 'label'), LABEL_CHAR_LIMIT),
-      status: readEnum(entry, ['status'], STATUS_PREFIXES),
+      status: readEnum(entry, ['status'], DIAGNOSIS_STATUS_PREFIXES),
       failedJobCount: readNumber(entry, 'failedProblemCandidateCount'),
       nextStep: parseNextSteps(entry, 'nextCommands')[0],
     }),
   );
 
   const diagnosis: Diagnosis = {
-    state: readEnum(response, ['state'], ['state', 'diagnosis_state']) ?? 'unknown',
-    emptyReason: readEnum(response, ['emptyReason'], ['empty_reason']),
+    state: readEnum(response, ['state'], DIAGNOSIS_STATE_PREFIXES) ?? 'unknown',
+    emptyReason: readEnum(response, ['emptyReason'], DIAGNOSIS_EMPTY_REASON_PREFIXES),
     target: {
       targetId: readString(target, 'targetId'),
-      targetType: mapEnumNumber(target, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, ['target_type']),
-      status: readEnum(target, ['status'], STATUS_PREFIXES),
+      targetType: mapEnumNumber(target, ['targetType'], DIAGNOSIS_TARGET_TYPE_NAMES, DIAGNOSIS_TARGET_TYPE_PREFIXES),
+      status: readEnum(target, ['status'], DIAGNOSIS_STATUS_PREFIXES),
     },
     context: parseContext(readObject(response, 'context')),
     failureGroups: groups,

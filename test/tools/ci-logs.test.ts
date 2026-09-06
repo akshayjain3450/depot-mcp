@@ -19,6 +19,35 @@ const bothPages = {
 };
 
 describe('depot_get_ci_logs', () => {
+  it('strips ANSI escape sequences and labels lines by step name when Depot provides one', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.getJobAttemptLogs]: ok({
+          lines: [
+            {
+              stepKey: '1577e34d-20c6-4acd-a7ce-e39ef720fde0',
+              stepName: 'Run the test suite',
+              lineNumber: 2,
+              body: '\u001b[36;1mecho "running tests"\u001b[0m',
+            },
+            { stepKey: 'k2', lineNumber: 3, body: '\u001b]8;;https://x\u0007link\u001b]8;;\u0007 plain' },
+          ],
+        }),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_get_ci_logs', { id: 'att_1', targetType: 'attempt' });
+    const lines = result.structured.lines as Array<Record<string, unknown>>;
+
+    expect(result.isError).toBe(false);
+    expect(lines[0]?.body).toBe('echo "running tests"');
+    expect(lines[0]?.stepName).toBe('Run the test suite');
+    expect(lines[1]?.body).toBe('link plain');
+    expect(result.text).toContain('[Run the test suite] echo "running tests"');
+    expect(result.text).toContain('[k2] link plain');
+    expect(result.text).not.toContain('\u001b');
+  });
+
   it('pages to the end of the log and returns every line by default', async () => {
     harness = await createHarness({ routes: bothPages });
 

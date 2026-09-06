@@ -6,7 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- First live Depot CI run: Depot's diagnosis document uses longer enum names than the CLI's JSON (`FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES`, `FAILURE_DIAGNOSIS_TARGET_TYPE_RUN`, `DRILL_DOWN_COMMAND_KIND_LOGS`, and so on); they now normalise to `grouped_failures`, `run`, `logs`, so states read correctly and next-step commands map to tools.
+- `depot_list_ci_runs` with no status filter returned nothing, because Depot's `ListRuns` answers an empty list unless a status filter is present; the tool now sends every status when the caller gives none.
+- `depot_get_ci_logs` strips ANSI colour and hyperlink escape sequences from log lines and labels lines with the step's name (`[Run the test suite]`) instead of its UUID key, when Depot provides one.
 
 ## [0.1.0] - 2026-09-06
 
