@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolContext, ToolModule } from '../lib/tool.js';
 import { listCiArtifactsTool } from './ci-artifacts.js';
+import { compareCiRunsTool } from './ci-compare.js';
 import { listCiSecretsTool, listCiVariablesTool } from './ci-config.js';
 import { diagnoseCiFailureTool } from './ci-diagnose.js';
 import { getCiLogsTool } from './ci-logs.js';
@@ -22,6 +23,7 @@ export const readOnlyTools: readonly ToolModule[] = [
   getCiJobSummaryTool,
   getCiMetricsTool,
   listCiArtifactsTool,
+  compareCiRunsTool,
   diagnoseBuildTool,
   listBuildsTool,
   listProjectsTool,

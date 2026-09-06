@@ -67,6 +67,7 @@
     { "name": "depot_get_ci_job_summary", "description": "The markdown a job published about itself." },
     { "name": "depot_get_ci_metrics", "description": "CPU and memory for a run, job, or attempt." },
     { "name": "depot_list_ci_artifacts", "description": "Artifacts a run uploaded, with optional signed download URLs." },
+    { "name": "depot_compare_ci_runs", "description": "Two runs side by side: job status, duration, and peak memory deltas, jobs in only one run, failures new in B versus resolved in B." },
     { "name": "depot_list_builds", "description": "Recent container builds with duration and cache hit ratio." },
     { "name": "depot_list_projects", "description": "Build projects with region, hardware, and cache policy." },
     { "name": "depot_get_project", "description": "One project's configuration and OIDC trust policies." },

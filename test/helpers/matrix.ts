@@ -59,6 +59,19 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     },
   },
   {
+    name: 'depot_compare_ci_runs',
+    args: { runA: 'run_cmp_a', runB: 'run_cmp_b' },
+    routes: {
+      [RPC.getRun]: [ok(fixture('compare-run-a')), ok(fixture('compare-run-b'))],
+      [RPC.getRunStatus]: [ok(fixture('compare-status-a')), ok(fixture('compare-status-b'))],
+      [RPC.getRunMetrics]: [ok(fixture('compare-metrics-a')), ok(fixture('compare-metrics-b'))],
+      [RPC.getFailureDiagnosis]: [
+        ok(fixture('compare-diagnosis-a')),
+        ok(fixture('compare-diagnosis-b')),
+      ],
+    },
+  },
+  {
     name: 'depot_diagnose_build',
     args: { buildId: 'bld_4a91c7', projectId: 'proj_api7f2' },
     routes: {

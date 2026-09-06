@@ -27,7 +27,8 @@ export interface StubReply {
   readonly raw?: string;
 }
 
-export type StubRoute = StubReply | readonly StubReply[];
+/** A function route answers per request body, for RPCs a tool calls once per side or target. */
+export type StubRoute = StubReply | readonly StubReply[] | ((body: JsonObject) => StubReply);
 
 /** Keyed by `<fully.qualified.Service>/<Method>`. */
 export type StubRoutes = Record<string, StubRoute>;
@@ -95,13 +96,13 @@ export function stubFetch(routes: StubRoutes, calls: RecordedCall[]): FetchLike 
         headers[key.toLowerCase()] = value;
       }
     }
-    calls.push({
-      rpc,
-      body: decodedBinary ?? asObject(JSON.parse(rawBody) as unknown) ?? {},
-      headers,
-    });
+    const body = decodedBinary ?? asObject(JSON.parse(rawBody) as unknown) ?? {};
+    calls.push({ rpc, body, headers });
 
     const route = routes[rpc];
+    if (typeof route === 'function') {
+      return Promise.resolve(jsonResponse(route(body)));
+    }
     if (route === undefined) {
       return Promise.resolve(
         jsonResponse(

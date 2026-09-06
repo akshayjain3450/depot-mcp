@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   callTool,
+  connectError,
   createHarness,
   fixture,
   NOT_FOUND,
@@ -165,6 +166,42 @@ const GIANT_CASES: readonly GiantCase[] = [
           artifactId: `art_${i}`,
           name: `artifact-${i}-${'n'.repeat(60)}.xml`,
           sizeBytes: 1024 * i,
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_compare_ci_runs',
+    args: { runA: 'run_giant_a', runB: 'run_giant_b', maxJobs: 500 },
+    routes: {
+      [RPC.getRun]: ok(fixture('compare-run-a')),
+      [RPC.getRunStatus]: ok({
+        runId: 'run_giant',
+        status: 'failed',
+        workflows: [
+          {
+            workflowId: 'wf_giant',
+            name: 'ci',
+            status: 'failed',
+            jobs: many(300, (j) => ({
+              jobId: `job_${j}`,
+              jobKey: `ci.yml:${filler(j)}`,
+              status: 'failed',
+              attempts: [{ attemptId: `att_${j}`, attempt: 1, status: 'failed' }],
+            })),
+          },
+        ],
+      }),
+      [RPC.getRunMetrics]: connectError(429, 'resource_exhausted', 'too large'),
+      [RPC.getFailureDiagnosis]: ok({
+        state: 'FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES',
+        target: { targetId: 'run_giant', targetType: 1 },
+        failureGroups: many(20, (g) => ({
+          fingerprint: `fp_${g}`,
+          count: 3,
+          errorMessage: `error ${g} ${'e'.repeat(500)}`,
+          representatives: [{ attemptId: `att_${g}`, jobKey: `job ${g}`, attempt: 1 }],
         })),
       }),
     },

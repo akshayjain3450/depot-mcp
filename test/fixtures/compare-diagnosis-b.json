@@ -1,0 +1,55 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES",
+  "target": {
+    "targetId": "run_cmp_b",
+    "targetType": "FAILURE_DIAGNOSIS_TARGET_TYPE_RUN",
+    "status": "FAILURE_DIAGNOSIS_RESOURCE_STATUS_FAILED"
+  },
+  "context": {
+    "runId": "run_cmp_b",
+    "repo": "acme/api",
+    "sha": "ffff6666aaaa7777bbbb8888cccc9999dddd0000",
+    "trigger": "push",
+    "runStatus": "FAILURE_DIAGNOSIS_RESOURCE_STATUS_FAILED"
+  },
+  "failureGroups": [
+    {
+      "fingerprint": "attempt_error:error:Step 4 (Compile): error TS2322: Type 'string' is not assignable to type 'number'",
+      "source": "attempt_error",
+      "count": 2,
+      "errorMessage": "Step 4 (Compile): error TS2322: Type 'string' is not assignable to type 'number'",
+      "representatives": [
+        {
+          "runId": "run_cmp_b",
+          "jobId": "job_b_build",
+          "jobKey": "ci.yml:build",
+          "attemptId": "att_b_build_2",
+          "attempt": 2,
+          "attemptConclusion": "FAILURE_DIAGNOSIS_CONCLUSION_FAILURE",
+          "errorMessage": "Step 4 (Compile): error TS2322: Type 'string' is not assignable to type 'number'"
+        }
+      ]
+    },
+    {
+      "fingerprint": "attempt_error:error:Error: ENOSPC: no space left on device",
+      "source": "attempt_error",
+      "count": 1,
+      "errorMessage": "Error: ENOSPC: no space left on device",
+      "representatives": [
+        {
+          "runId": "run_cmp_b",
+          "jobId": "job_b_build",
+          "jobKey": "ci.yml:build",
+          "attemptId": "att_b_build_1",
+          "attempt": 1,
+          "attemptConclusion": "FAILURE_DIAGNOSIS_CONCLUSION_FAILURE",
+          "errorMessage": "Error: ENOSPC: no space left on device"
+        }
+      ]
+    }
+  ],
+  "representativeAttempts": [],
+  "bounds": { "totalFailureGroupCount": 2, "failureGroupLimit": 20 },
+  "nextCommands": []
+}

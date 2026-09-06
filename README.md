@@ -78,7 +78,7 @@ Depot has three kinds of token and they are not interchangeable. Verified live o
 | Tool group | Organization token | User token |
 | --- | --- | --- |
 | `depot_whoami` | yes | yes |
-| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
+| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts`, `depot_compare_ci_runs` | yes | yes |
 | `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
 | `depot_list_images` | yes | yes |
 | `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
@@ -407,7 +407,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 17 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -427,6 +427,7 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | `depot_get_ci_job_summary` | What did the job publish about itself (the `$GITHUB_STEP_SUMMARY` equivalent)? |
 | `depot_get_ci_metrics` | Was this an OOM kill or CPU starvation? CPU/memory for a run, job, or attempt. |
 | `depot_list_ci_artifacts` | What did the run upload, and what is its signed download URL? Accepts `pageToken`. |
+| `depot_compare_ci_runs` | What changed between two runs? A job matrix keyed by job key with status in A versus B, duration and peak memory deltas (from `GetRunMetrics`, blank when Depot has no samples), jobs only in one run, and failure error messages new in B versus resolved in B (from Depot's failure analysis, fetched only for the sides that failed). For regressions between two commits and telling a flaky failure from a deterministic one. |
 | `depot_list_ci_secrets` | Which CI secrets exist and where do they apply? **Names and scoping only**; Depot never returns secret values. |
 | `depot_list_ci_variables` | Which CI variables exist, with values and scoping. Credential-shaped values are redacted (see below). |
 

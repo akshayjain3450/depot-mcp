@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `depot_compare_ci_runs`: compare two Depot CI runs. Returns each run's identity and wall time, a job matrix keyed by job key with status in A versus B, duration and peak memory deltas read from `GetRunMetrics` (tolerated when that RPC fails or has no samples), jobs present in only one run, and failure error messages new in B versus resolved in B from Depot's failure analysis, fetched only for the sides that failed (`includeDiagnosis=false` skips it). Changed rows are kept first under `maxJobs`. Verified live against two failed runs on 2026-09-06. Tool count is now 17.
 
 ## [0.1.1] - 2026-09-06
 

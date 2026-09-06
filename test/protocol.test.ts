@@ -14,7 +14,7 @@ import { TOOL_MATRIX } from './helpers/matrix.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOOL_NAME = /^depot_[a-z0-9]+(?:_[a-z0-9]+)*$/;
-const EXPECTED_TOOL_COUNT = 16;
+const EXPECTED_TOOL_COUNT = 17;
 
 let harness: Harness | undefined;
 

@@ -36,7 +36,7 @@ describe('server registration', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...readOnlyTools.map((tool) => tool.name)].sort(),
     );
-    expect(tools).toHaveLength(16);
+    expect(tools).toHaveLength(17);
     expect(mutatingTools).toHaveLength(0);
   });
 

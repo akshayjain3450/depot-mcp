@@ -13,6 +13,7 @@ export const RPC = {
   listRuns: 'depot.ci.v1.CIService/ListRuns',
   getRun: 'depot.ci.v1.CIService/GetRun',
   getRunStatus: 'depot.ci.v1.CIService/GetRunStatus',
+  getRunMetrics: 'depot.ci.v1.CIService/GetRunMetrics',
   getFailureDiagnosis: 'depot.ci.v1.CIService/GetFailureDiagnosis',
   getJobAttemptLogs: 'depot.ci.v1.CIService/GetJobAttemptLogs',
   getJobSummary: 'depot.ci.v1.CIService/GetJobSummary',
