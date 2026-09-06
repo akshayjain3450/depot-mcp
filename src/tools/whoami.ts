@@ -4,6 +4,7 @@ import { readObjectArray, readString } from '../depot/shape.js';
 import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
+import { mutatingTools } from './writes.js';
 
 const PROJECT_PREVIEW_LIMIT = 25;
 
@@ -41,7 +42,7 @@ export const whoamiTool = defineTool({
 
 Call this first whenever another Depot tool returns an empty list or a permission error. Depot's most common confusing failure is a token that spans several organizations with none selected: requests then resolve against the wrong organization and return empty results rather than an error. This tool says plainly whether that is happening and what to set.
 
-Also reports whether write tools are enabled. This version of the server ships no mutating tools at all, so the answer is always that nothing can be modified.
+Also reports whether write tools are enabled (DEPOT_MCP_ALLOW_WRITES) and which mutating tools are registered. With the flag unset none are, and nothing here can retry, cancel, rerun, or delete anything.
 
 Never returns the token or any part of it.`,
   inputSchema: {},
@@ -55,7 +56,8 @@ Never returns the token or any part of it.`,
     projectCount: z.number().optional(),
     projects: z.array(z.object({ projectId: z.string().optional(), name: z.string().optional() })),
     writesEnabled: z.boolean(),
-    mutatingToolsAvailable: z.literal(0),
+    mutatingToolsAvailable: z.number(),
+    mutatingTools: z.array(z.string()),
     warnings: z.array(z.string()),
     failures: z.array(z.object({ check: z.string(), detail: z.string() })),
   },
@@ -154,11 +156,9 @@ Never returns the token or any part of it.`,
         'The token authenticated but sees no organizations. That is typical of a project token, which cannot reach the Depot CI API or the Depot API — use an Organization token instead.',
       );
     }
-    if (context.config.allowWrites) {
-      warnings.push(
-        'DEPOT_MCP_ALLOW_WRITES is set, but this version registers no mutating tools, so it currently has no effect.',
-      );
-    }
+    const registeredWrites = context.config.allowWrites
+      ? mutatingTools.map((tool) => tool.name)
+      : [];
 
     const text = new TextBudget(context.config.outputCharBudget);
     const kindLabel =
@@ -200,7 +200,9 @@ Never returns the token or any part of it.`,
 
     text.push(
       '',
-      'Writes: this server version registers no mutating tools, so nothing here can retry, cancel, rerun, or delete anything.',
+      registeredWrites.length > 0
+        ? `Writes: ENABLED by DEPOT_MCP_ALLOW_WRITES. ${registeredWrites.length} mutating tool(s) registered: ${registeredWrites.join(', ')}. Each defaults to dryRun:true and changes nothing until called again with dryRun:false after the user confirms the preview.`
+        : 'Writes: disabled. DEPOT_MCP_ALLOW_WRITES is not set, so no mutating tool is registered and nothing here can retry, cancel, rerun, or delete anything.',
     );
 
     if (warnings.length > 0) {
@@ -230,7 +232,8 @@ Never returns the token or any part of it.`,
           .slice(0, PROJECT_PREVIEW_LIMIT)
           .map((project) => ({ projectId: project.projectId, name: project.name })),
         writesEnabled: context.config.allowWrites,
-        mutatingToolsAvailable: 0 as const,
+        mutatingToolsAvailable: registeredWrites.length,
+        mutatingTools: registeredWrites,
         warnings,
         failures,
       },

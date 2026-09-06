@@ -10,11 +10,18 @@ import { z } from 'zod';
 import { asObject } from '../src/depot/shape.js';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
 import { callTool, createHarness, type Harness } from './helpers/harness.js';
-import { TOOL_MATRIX } from './helpers/matrix.js';
+import { TOOL_MATRIX, WRITE_TOOL_MATRIX } from './helpers/matrix.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOOL_NAME = /^depot_[a-z0-9]+(?:_[a-z0-9]+)*$/;
 const EXPECTED_TOOL_COUNT = 16;
+const WRITE_TOOL_NAMES = [
+  'depot_cancel_ci_run',
+  'depot_cancel_ci_job',
+  'depot_retry_ci_failed_jobs',
+  'depot_retry_ci_job',
+  'depot_rerun_ci_workflow',
+];
 
 let harness: Harness | undefined;
 
@@ -136,6 +143,120 @@ describe('tools/list', () => {
     expect(TOOL_MATRIX.map((entry) => entry.name).sort()).toEqual(
       tools.map((tool) => tool.name).sort(),
     );
+  });
+
+  it('never lists a write tool while DEPOT_MCP_ALLOW_WRITES is unset', async () => {
+    harness = await createHarness({ routes: {} });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    for (const name of WRITE_TOOL_NAMES) {
+      expect(names).not.toContain(name);
+    }
+  });
+});
+
+describe('tools/list with DEPOT_MCP_ALLOW_WRITES', () => {
+  it(`adds exactly the ${WRITE_TOOL_NAMES.length} write tools to the ${EXPECTED_TOOL_COUNT} read-only ones`, async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true } });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT + WRITE_TOOL_NAMES.length);
+    expect(new Set(names).size).toBe(tools.length);
+    expect(names.filter((name) => WRITE_TOOL_NAMES.includes(name)).sort()).toEqual([...WRITE_TOOL_NAMES].sort());
+    for (const name of names) {
+      expect(name, name).toMatch(TOOL_NAME);
+    }
+  });
+
+  it('annotates every write tool as not read-only and open-world, with honest destructive and idempotent hints', async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true } });
+    const { tools } = await harness.client.listTools();
+    const byName = new Map(tools.map((tool) => [tool.name, tool.annotations ?? {}]));
+
+    for (const name of WRITE_TOOL_NAMES) {
+      const annotations = byName.get(name) ?? {};
+      expect(annotations.readOnlyHint, name).toBe(false);
+      expect(annotations.openWorldHint, name).toBe(true);
+      expect(typeof annotations.title, name).toBe('string');
+    }
+    expect(byName.get('depot_cancel_ci_run')).toMatchObject({ destructiveHint: true, idempotentHint: true });
+    expect(byName.get('depot_cancel_ci_job')).toMatchObject({ destructiveHint: true, idempotentHint: true });
+    expect(byName.get('depot_retry_ci_failed_jobs')).toMatchObject({ destructiveHint: false, idempotentHint: false });
+    expect(byName.get('depot_retry_ci_job')).toMatchObject({ destructiveHint: false, idempotentHint: false });
+    expect(byName.get('depot_rerun_ci_workflow')).toMatchObject({ destructiveHint: false, idempotentHint: false });
+
+    // The read-only tools keep their annotations when writes are on.
+    for (const tool of tools) {
+      if (!WRITE_TOOL_NAMES.includes(tool.name)) {
+        expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+      }
+    }
+  });
+
+  it('gives every write tool a dryRun argument defaulting to true, with every property described', async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true } });
+    const { tools } = await harness.client.listTools();
+
+    for (const tool of tools.filter((entry) => WRITE_TOOL_NAMES.includes(entry.name))) {
+      const properties = asObject(tool.inputSchema.properties) ?? {};
+      const dryRun = asObject(properties.dryRun) ?? {};
+      expect(dryRun.type, tool.name).toBe('boolean');
+      expect(dryRun.default, tool.name).toBe(true);
+      for (const [property, schema] of Object.entries(properties)) {
+        const description = asObject(schema)?.description;
+        expect(typeof description, `${tool.name}.${property}`).toBe('string');
+        expect(String(description).trim().length, `${tool.name}.${property}`).toBeGreaterThan(10);
+      }
+      expect(tool.description ?? '', tool.name).toContain('dryRun:false');
+      const output = asObject(tool.outputSchema) ?? {};
+      expect(Object.keys(asObject(output.properties) ?? {}), tool.name).toEqual(
+        expect.arrayContaining(['applied', 'preview', 'resend', 'before', 'after']),
+      );
+    }
+  });
+
+  it('is fully covered by the write invocation matrix', async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true } });
+    const { tools } = await harness.client.listTools();
+
+    expect(WRITE_TOOL_MATRIX.map((entry) => entry.name).sort()).toEqual(
+      tools.map((tool) => tool.name).filter((name) => WRITE_TOOL_NAMES.includes(name)).sort(),
+    );
+  });
+
+  it.each(WRITE_TOOL_MATRIX)(
+    '$name dry-runs to text plus structured content that validates against its output schema, calling no mutating RPC',
+    async ({ name, args, routes }) => {
+      harness = await createHarness({ routes, config: { allowWrites: true } });
+      await harness.client.listTools();
+
+      const result = await callTool(harness, name, args);
+
+      expect(result.isError, result.text).toBe(false);
+      expect(result.structured.applied).toBe(false);
+      expect(result.structured.refusal).toBeUndefined();
+      expect(result.structured.resend).toMatchObject({ ...args, dryRun: false });
+      expect(result.text).toContain('DRY RUN');
+      for (const call of harness.calls) {
+        expect(call.rpc).toMatch(/\/(Get|List)[A-Za-z]+$/);
+      }
+    },
+  );
+
+  it('mentions the write tools and the dry-run flow in the instructions only when enabled', async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true } });
+    const enabled = harness.client.getInstructions() ?? '';
+    await harness.close();
+    harness = await createHarness({ routes: {} });
+    const disabled = harness.client.getInstructions() ?? '';
+
+    expect(enabled).toContain('depot_retry_ci_failed_jobs');
+    expect(enabled).toContain('dryRun:false');
+    expect(enabled).toMatch(/read-only/i);
+    expect(disabled).not.toContain('depot_retry_ci_failed_jobs');
+    expect(disabled).toContain('Every tool here is read-only');
   });
 });
 

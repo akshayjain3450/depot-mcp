@@ -37,7 +37,7 @@ describe('server registration', () => {
       [...readOnlyTools.map((tool) => tool.name)].sort(),
     );
     expect(tools).toHaveLength(16);
-    expect(mutatingTools).toHaveLength(0);
+    expect(mutatingTools).toHaveLength(5);
   });
 
   it('marks every tool read-only and non-destructive', async () => {
@@ -99,12 +99,23 @@ describe('server registration', () => {
     }
   });
 
-  it('registers no extra tools when DEPOT_MCP_ALLOW_WRITES is enabled, since v1 ships none', async () => {
+  it('registers exactly the mutating tools on top of the read-only ones when DEPOT_MCP_ALLOW_WRITES is enabled', async () => {
     harness = await createHarness({ routes: {}, config: { allowWrites: true } });
     const { tools } = await harness.client.listTools();
 
-    expect(tools).toHaveLength(readOnlyTools.length);
-    expect(tools.map((tool) => tool.name)).not.toContain('depot_retry_ci_failed_jobs');
+    expect(tools).toHaveLength(readOnlyTools.length + mutatingTools.length);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+      [...readOnlyTools, ...mutatingTools].map((tool) => tool.name).sort(),
+    );
+    expect(tools.map((tool) => tool.name)).toContain('depot_retry_ci_failed_jobs');
+  });
+
+  it('names every mutating tool with a verb the read-only check would reject, so a write can never pass as a read', () => {
+    for (const tool of mutatingTools) {
+      const verb = tool.name.replace(/^depot_/, '').split('_')[0] ?? '';
+      expect(MUTATING_WORDS, tool.name).toContain(verb);
+      expect(tool.annotations.readOnlyHint, tool.name).toBe(false);
+    }
   });
 
   it('registers the diagnostic prompts', async () => {

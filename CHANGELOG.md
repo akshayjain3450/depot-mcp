@@ -6,7 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- First write tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1` and absent from `tools/list` otherwise: `depot_cancel_ci_run` (`CancelRun`, or `CancelWorkflow` with a `workflowId`), `depot_cancel_ci_job` (`CancelJob`), `depot_retry_ci_failed_jobs` (`RetryFailedJobs`, by `workflowId` or by a single-workflow `runId`), `depot_retry_ci_job` (`RetryJob`), and `depot_rerun_ci_workflow` (`RerunWorkflow`).
+- A shared write pattern (`src/lib/write.ts`): `dryRun` defaults to `true` and returns a preview read from Depot plus the exact arguments to resend; the apply step re-reads the state, runs the refusal rules before any mutating RPC, translates Depot's `412 failed_precondition` into a readable message, and logs one `[depot-mcp write] <tool> <ids> <time>` line to stderr per applied write. Annotations: `readOnlyHint: false` and `openWorldHint: true` on every write, `destructiveHint: true` on the cancels, `idempotentHint: false` on retries and reruns.
+- Refusals: terminal targets for the cancels, a running workflow for retries and reruns, zero failed jobs, an ambiguous run with several workflows, any failed job at 3 or more attempts unless `force: true`, a full rerun while failed jobs exist unless `allowFullRerun: true`, and a `workflowId` or `jobId` outside the named `runId`.
+- `DepotApi.getJob` and `DepotApi.getWorkflow` (read), the six mutating CI RPCs, and parsers for Depot's flat `GetJob` and `GetWorkflow` documents (`src/lib/ci-detail.ts`).
+
+### Changed
+
+- `depot_whoami` reports the real count and names of registered mutating tools (`mutatingToolsAvailable`, `mutatingTools`) instead of a fixed zero, and no longer warns that the flag has no effect.
+- The startup banner and the server instructions describe the write tools and the dry-run flow when the flag is set; the instructions still say read-only otherwise.
+
+### Verification
+
+- Every write tool was dry-run live against real failed Depot CI runs (previews, refusals, resend arguments). The apply path, that is the mutating RPCs and their undocumented responses, is covered by stubbed tests only and has not been exercised against Depot.
 
 ## [0.1.1] - 2026-09-06
 

@@ -57,7 +57,9 @@ Deliberately not added: standalone secret and variable getters (the list tools w
 
 ## 0.3: first write tools
 
-Nine tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag never sees them. The registration gate already exists in `src/tools/index.ts`.
+Nine tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag never sees them. The registration gate lives in `src/tools/index.ts`, the gated list in `src/tools/writes.ts`, and the shared pattern in `src/lib/write.ts`.
+
+**Status (unreleased, after 0.1.1):** the five CI tools marked "shipped" below are implemented, tested against stubs, and dry-run live against real failed runs. Their apply path has not yet been exercised against Depot. The dispatch, variable, and project tools are not started.
 
 Every write tool follows one pattern:
 
@@ -67,17 +69,19 @@ Every write tool follows one pattern:
 - Annotations: `readOnlyHint: false`; `destructiveHint` true only for cancel and delete; `idempotentHint` false for anything that creates a new attempt or run.
 - Never accept inline workflow content, secret values, or token descriptions.
 
-| Tool | Depot RPC | Refuses |
-| --- | --- | --- |
-| `depot_cancel_ci_run` | `CancelRun` (or `CancelWorkflow`) | a run that is already terminal |
-| `depot_cancel_ci_job` | `CancelJob` | a terminal job, or one not in the named run |
-| `depot_retry_ci_failed_jobs` | `RetryFailedJobs` | a workflow still running; zero failed jobs; any job already at three attempts unless forced; an ambiguous run with several workflows |
-| `depot_retry_ci_job` | `RetryJob` | a job that did not fail; the same attempt cap |
-| `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, pointing at the retry tool instead |
-| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | a workflow path with a slash (basename only), an empty ref, a malformed repo, oversized inputs, and optionally anything outside an allowlist. Its description says plainly that this can deploy to production if the workflow does. |
-| `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value (the redaction rules decide), a name that collides with a secret |
-| `depot_delete_ci_variable` | `DeleteVariableVariant` | a whole-variable delete unless asked for; a selector matching zero or many variants |
-| `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region. Organization token only. |
+| Tool | Depot RPC | Refuses | Status |
+| --- | --- | --- | --- |
+| `depot_cancel_ci_run` | `CancelRun` (or `CancelWorkflow`) | a run that is already terminal; a workflow outside the named run | shipped |
+| `depot_cancel_ci_job` | `CancelJob` | a terminal job, or one not in the named run | shipped |
+| `depot_retry_ci_failed_jobs` | `RetryFailedJobs` | a workflow still running; zero failed jobs; any job already at three attempts unless forced; an ambiguous run with several workflows | shipped |
+| `depot_retry_ci_job` | `RetryJob` | a job that did not fail; the same attempt cap | shipped |
+| `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, pointing at the retry tool instead | shipped |
+| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | a workflow path with a slash (basename only), an empty ref, a malformed repo, oversized inputs, and optionally anything outside an allowlist. Its description says plainly that this can deploy to production if the workflow does. | not started |
+| `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value (the redaction rules decide), a name that collides with a secret | not started |
+| `depot_delete_ci_variable` | `DeleteVariableVariant` | a whole-variable delete unless asked for; a selector matching zero or many variants | not started |
+| `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region. Organization token only. | not started |
+
+Two details settled while shipping the first five: the mutating CI RPCs take a single id each (`CancelJob {jobId}`, `RetryJob {jobId}`, not the `{workflowId, jobId}` pair the API survey listed), and their responses are undocumented, so the tools report whatever ids come back rather than asserting a shape.
 
 ## Permanently excluded
 
@@ -109,7 +113,7 @@ Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagn
 | Today (0.1) | 16 | 2 | 0 |
 | 0.2 reads, always on | +12 | +5 | +4 |
 | 0.2 reads, beta-gated | +5 | | |
-| 0.3 writes, flag-gated | +9 | | |
+| 0.3 writes, flag-gated (5 of 9 shipped, unreleased) | +9 | | |
 | End of roadmap | 42 | 7 | 4 |
 
 For scale, the one known third-party codebase with Depot tools ships 46, of which 15 are writes this project excludes permanently. This roadmap reaches a comparable read surface, plus sandbox and registry reads it lacks, with none of the credential or deletion operations.

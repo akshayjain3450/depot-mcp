@@ -211,7 +211,7 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     expect(spawned.stderr()).toContain('16 read-only tool(s), 0 mutating tool(s)');
   });
 
-  it('warns on stderr that DEPOT_MCP_ALLOW_WRITES has no effect', async () => {
+  it('announces the registered write tools on stderr when DEPOT_MCP_ALLOW_WRITES is set', async () => {
     const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy', DEPOT_MCP_ALLOW_WRITES: '1' });
     await initialize(spawned);
 
@@ -219,6 +219,10 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
 
     expect(exit.code).toBe(0);
-    expect(spawned.stderr()).toContain('no effect');
+    expect(spawned.stderr()).toContain('16 read-only tool(s), 5 mutating tool(s)');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 5 mutating tool(s) registered');
+    expect(spawned.stderr()).toContain('depot_cancel_ci_run');
+    expect(spawned.stderr()).toContain('dryRun:true');
+    expect(spawned.stderr()).not.toContain('dummy');
   });
 });

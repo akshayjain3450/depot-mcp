@@ -215,6 +215,44 @@ export class DepotApi {
     });
   }
 
+  /** One job with its run and workflow context and every attempt (observed live 2026-09-06). */
+  getJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetJob'), { jobId });
+  }
+
+  /** One workflow with its execution history and nested jobs (observed live 2026-09-06). */
+  getWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetWorkflow'), { workflowId });
+  }
+
+  // Mutating RPCs. Only the write tools behind DEPOT_MCP_ALLOW_WRITES call these; their response
+  // shapes are undocumented, so callers read whatever ids come back through `shape.ts`.
+  // Request bodies confirmed against Depot on 2026-09-06: each takes a single id.
+
+  cancelRun(runId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelRun'), { runId });
+  }
+
+  cancelWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelWorkflow'), { workflowId });
+  }
+
+  cancelJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelJob'), { jobId });
+  }
+
+  retryJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RetryJob'), { jobId });
+  }
+
+  retryFailedJobs(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RetryFailedJobs'), { workflowId });
+  }
+
+  rerunWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RerunWorkflow'), { workflowId });
+  }
+
   /**
    * v3beta2 secret/variable list filters are undocumented, and Connect's JSON codec rejects
    * unknown fields, so the request is deliberately empty and all filtering happens client-side.

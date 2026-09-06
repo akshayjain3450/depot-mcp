@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ConfigError, DEFAULT_API_URL, loadConfig } from './config.js';
 import { createServer, SERVER_NAME, SERVER_VERSION } from './server.js';
 
-const HELP = `${SERVER_NAME} ${SERVER_VERSION}: read-only MCP server for depot.dev, speaking JSON-RPC over stdio.
+const HELP = `${SERVER_NAME} ${SERVER_VERSION}: MCP server for depot.dev, speaking JSON-RPC over stdio. Read-only unless DEPOT_MCP_ALLOW_WRITES is set.
 
 Usage: ${SERVER_NAME} [--help | --version]
 
@@ -14,7 +14,8 @@ Configuration is read from the environment:
   DEPOT_API_URL            API endpoint (default ${DEFAULT_API_URL}); must be https except on localhost.
   DEPOT_MCP_MAX_LOG_PAGES  Log pages read per call (positive integer).
   DEPOT_MCP_OUTPUT_BUDGET  Characters of tool output per call (positive integer).
-  DEPOT_MCP_ALLOW_WRITES   Reserved; this version ships no mutating tools.
+  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the Depot CI write tools (cancel, retry, rerun).
+                           Off by default. Every write defaults to dryRun:true.
 
 See the README for the MCP client configuration and the full list of tools.
 `;
@@ -46,7 +47,7 @@ async function main(): Promise<void> {
   );
   if (registration.writesEnabled) {
     console.error(
-      'DEPOT_MCP_ALLOW_WRITES is set, but this version ships no mutating tools, so it has no effect.',
+      `DEPOT_MCP_ALLOW_WRITES is set: ${registration.mutating.length} mutating tool(s) registered (${registration.mutating.join(', ')}). Each defaults to dryRun:true and changes nothing until called again with dryRun:false; every applied write is logged here as "[depot-mcp write] ...".`,
     );
   }
 

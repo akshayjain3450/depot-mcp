@@ -161,7 +161,7 @@ describe('depot_whoami', () => {
     expect(result.text).toContain('Checks that failed');
   });
 
-  it('flags that the write gate is inert in this version', async () => {
+  it('reports the registered write tools when DEPOT_MCP_ALLOW_WRITES is on', async () => {
     harness = await createHarness({
       routes: {
         [RPC.listOrganizations]: ok(fixture('organizations')),
@@ -173,8 +173,35 @@ describe('depot_whoami', () => {
     const result = await callTool(harness, 'depot_whoami', {});
 
     expect(result.structured.writesEnabled).toBe(true);
+    expect(result.structured.mutatingToolsAvailable).toBe(5);
+    expect(result.structured.mutatingTools).toEqual([
+      'depot_cancel_ci_run',
+      'depot_cancel_ci_job',
+      'depot_retry_ci_failed_jobs',
+      'depot_retry_ci_job',
+      'depot_rerun_ci_workflow',
+    ]);
+    expect(result.text).toContain('Writes: ENABLED');
+    expect(result.text).toContain('5 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.text).toContain('dryRun:true');
+    expect(JSON.stringify(result.structured.warnings)).not.toContain('no effect');
+  });
+
+  it('reports writes as disabled, with no mutating tools, when the gate is off', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.writesEnabled).toBe(false);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
-    expect(JSON.stringify(result.structured.warnings)).toContain('no effect');
+    expect(result.structured.mutatingTools).toEqual([]);
+    expect(result.text).toContain('Writes: disabled');
+    expect(result.text).not.toContain('depot_cancel_ci_run');
   });
 
   it('explains a token that authenticates but sees nothing', async () => {

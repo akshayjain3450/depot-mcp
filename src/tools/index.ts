@@ -12,6 +12,9 @@ import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
 import { getUsageTool } from './usage.js';
 import { whoamiTool } from './whoami.js';
+import { mutatingTools } from './writes.js';
+
+export { mutatingTools };
 
 export const readOnlyTools: readonly ToolModule[] = [
   whoamiTool,
@@ -32,13 +35,6 @@ export const readOnlyTools: readonly ToolModule[] = [
   listCiVariablesTool,
 ];
 
-/**
- * Empty by design. This version of the server is read-only; the list and the DEPOT_MCP_ALLOW_WRITES
- * gate around it exist so mutating tools can be added later without reworking registration.
- * Depot has no read-only token scope, so this gate is the only thing enforcing least privilege.
- */
-export const mutatingTools: readonly ToolModule[] = [];
-
 export interface RegistrationSummary {
   readonly readOnly: string[];
   readonly mutating: string[];
@@ -50,6 +46,8 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
     tool.register(server, context);
   }
 
+  // The gate. With DEPOT_MCP_ALLOW_WRITES unset the write tools are never registered, so a
+  // client cannot list, call, or be talked into calling them.
   const mutating: string[] = [];
   if (context.config.allowWrites) {
     for (const tool of mutatingTools) {

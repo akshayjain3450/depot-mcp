@@ -2,7 +2,7 @@
 
 Depot has three kinds of API token, and they are not interchangeable. This page lists exactly what each one can do through depot-mcp. Everything here was verified live against Depot's API on 2026-09-06 with two tokens from the same organization, one of them a user token belonging to an organization owner.
 
-The short version: **use an Organization token.** It runs every tool. A user token runs the CI tools, the registry tool, and `depot_whoami`, but Depot's project, build, and usage services refuse it no matter what role the user has.
+The short version: **use an Organization token.** It runs every tool, the opt-in write tools included. A user token runs the CI tools, the registry tool, and `depot_whoami`, but Depot's project, build, and usage services refuse it no matter what role the user has.
 
 ## By tool
 
@@ -26,8 +26,17 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_get_usage` | yes | **no** |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
+| Write tools (`DEPOT_MCP_ALLOW_WRITES`): `depot_cancel_ci_run`, `depot_cancel_ci_job`, `depot_retry_ci_failed_jobs`, `depot_retry_ci_job`, `depot_rerun_ci_workflow` | dry run verified; apply expected to work (same CI service) | expected to work for both steps, not yet verified |
 
 Project tokens run nothing here: Depot's own scope matrix excludes them from Depot CI and from the API.
+
+## Write tools
+
+The five write tools call `depot.ci.v1.CIService` only, the same service every CI read tool uses, and that service accepts both token kinds. Their dry-run step (the reads `GetRunStatus`, `GetJob`, `GetWorkflow`) has been verified live with an Organization token. The apply step (`CancelRun`, `CancelWorkflow`, `CancelJob`, `RetryJob`, `RetryFailedJobs`, `RerunWorkflow`) has not been exercised against Depot with either token kind; nothing in Depot's scope matrix suggests it would differ from the reads.
+
+Write tools planned on the roadmap for Depot's core services (`depot_create_project` on `depot.core.v1.ProjectService`, for example) will need an Organization token, since those services refuse user tokens for reads and there is no reason to expect writes to differ.
+
+Whatever the token kind, the token is not what keeps writes from happening: `DEPOT_MCP_ALLOW_WRITES` is. See below.
 
 ## By Depot service
 
@@ -62,7 +71,7 @@ Create a dedicated token for this server, named for the person and the purpose (
 ## What no token can do
 
 - **Start a container build.** Depot has no API for it. A build means acquiring a BuildKit endpoint over mTLS and streaming the local build context, which only the `depot` CLI does. This server observes builds; it never starts them.
-- **Restrict a token to read-only.** Depot has no read-only scope. An Organization token that can list runs can also cancel runs and delete projects. This server is read-only because it registers no mutating tool, not because the token is limited. See the [security section of the README](../README.md#read-only-model-and-security).
+- **Restrict a token to read-only.** Depot has no read-only scope. An Organization token that can list runs can also cancel runs and delete projects. This server is read-only because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is limited. With the flag set, every write tool dry-runs first and refuses server-side before calling Depot. See the [security section of the README](../README.md#read-only-model-and-security).
 
 ## If your token is the wrong kind
 

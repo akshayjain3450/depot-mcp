@@ -1,0 +1,32 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_9a1b2c",
+  "status": "running",
+  "workflows": [
+    {
+      "workflowId": "wf_5d6e7f",
+      "name": "CI",
+      "status": "running",
+      "jobs": [
+        {
+          "jobId": "job_aa11",
+          "jobKey": "lint",
+          "status": "finished",
+          "attempts": [{ "attemptId": "att_aa11", "attempt": 1, "status": "finished" }]
+        },
+        {
+          "jobId": "job_bb22",
+          "jobKey": "test (18)",
+          "status": "running",
+          "attempts": [{ "attemptId": "att_bb22", "attempt": 1, "status": "running" }]
+        },
+        {
+          "jobId": "job_cc33",
+          "jobKey": "deploy",
+          "status": "queued",
+          "attempts": []
+        }
+      ]
+    }
+  ]
+}

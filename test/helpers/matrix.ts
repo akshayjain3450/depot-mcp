@@ -117,3 +117,36 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     routes: { [RPC.listVariables]: ok(fixture('variables')) },
   },
 ];
+
+/**
+ * The write tools, one dry-run invocation each. They are only registered with allowWrites on, so
+ * the protocol suite iterates this list separately. Every route here is a read RPC: a dry run
+ * must never reach a mutating one, and the harness has no route for those anyway.
+ */
+export const WRITE_TOOL_MATRIX: readonly ToolInvocation[] = [
+  {
+    name: 'depot_cancel_ci_run',
+    args: { runId: 'run_9a1b2c' },
+    routes: { [RPC.getRunStatus]: ok(fixture('run-status-running')) },
+  },
+  {
+    name: 'depot_cancel_ci_job',
+    args: { jobId: 'job_bb22' },
+    routes: { [RPC.getJob]: ok({ ...fixture('job'), jobStatus: 'running', jobConclusion: undefined }) },
+  },
+  {
+    name: 'depot_retry_ci_failed_jobs',
+    args: { workflowId: 'wf_2b8e11' },
+    routes: { [RPC.getWorkflow]: ok(fixture('workflow')) },
+  },
+  {
+    name: 'depot_retry_ci_job',
+    args: { jobId: 'job_4d0a77' },
+    routes: { [RPC.getJob]: ok(fixture('job')) },
+  },
+  {
+    name: 'depot_rerun_ci_workflow',
+    args: { workflowId: 'wf_2b8e11', allowFullRerun: true },
+    routes: { [RPC.getWorkflow]: ok(fixture('workflow')) },
+  },
+];
