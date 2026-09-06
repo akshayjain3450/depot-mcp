@@ -29,6 +29,7 @@ A read-only [Model Context Protocol](https://modelcontextprotocol.io) server for
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Contributing](#contributing)
+- [Roadmap](./docs/roadmap.md)
 - [License](#license)
 
 ## Why this exists
