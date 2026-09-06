@@ -43,6 +43,8 @@ interface GiantCase {
   readonly saysTruncated: RegExp;
   /** Set when the tool is known to write outside the budget; the case is then marked `it.fails`. */
   readonly knownToExceed?: string;
+  /** Tools behind a registration gate need the matching flag in the harness config. */
+  readonly config?: { readonly enableBeta?: boolean };
 }
 
 const TRUNCATED_FOOTER = /output truncated/;
@@ -291,6 +293,78 @@ const GIANT_CASES: readonly GiantCase[] = [
     },
     saysTruncated: TRUNCATED_FOOTER,
   },
+  {
+    name: 'depot_list_sandboxes',
+    args: {},
+    config: { enableBeta: true },
+    routes: {
+      [RPC.listSandboxes]: ok({
+        sandboxes: many(500, (i) => ({
+          sandboxId: `sbx_${i}`,
+          name: `sandbox ${filler(i)}`,
+          status: 'SANDBOX_STATUS_FAILED',
+          createdAt: '2026-09-06T09:12:03Z',
+          runtime: { imageRef: 'ghcr.io/acme/runtime:latest' },
+          errorMessage: filler(i),
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_sandbox',
+    args: { sandboxId: 'sbx_giant' },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.getSandbox]: ok({
+        sandbox: {
+          sandboxId: 'sbx_giant',
+          status: 'SANDBOX_STATUS_FAILED',
+          errorMessage: 'e'.repeat(5_000),
+          env: Object.fromEntries(many(400, (i) => [`VAR_${i}_${'n'.repeat(40)}`, 'v'])),
+        },
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_registry_repositories',
+    args: { withRetentionPolicy: false },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.listRegistryRepositories]: ok({
+        repositories: many(500, (i) => ({
+          name: `acme/${filler(i)}`,
+          tagCount: i,
+          sizeBytes: 1_000_000,
+          lastPushedAt: '2026-09-06T07:55:12Z',
+        })),
+        page: 1,
+        hasMore: true,
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_registry_image',
+    args: { repository: 'acme/api', tag: 'giant' },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.getRegistryImageDetail]: ok({
+        digest: `sha256:${'a'.repeat(64)}`,
+        tags: many(300, (i) => `tag-${i}-${'t'.repeat(40)}`),
+        manifest: {
+          mediaType: 'application/vnd.oci.image.index.v1+json',
+          manifests: many(300, (i) => ({
+            digest: `sha256:${String(i).padStart(64, '0')}`,
+            size: 1000,
+            platform: { os: 'linux', architecture: `arch${i}` },
+          })),
+        },
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
 ];
 
 describe.each(GIANT_CASES)('$name against a response far larger than the budget', (giant) => {
@@ -301,7 +375,10 @@ describe.each(GIANT_CASES)('$name against a response far larger than the budget'
       ? 'keeps the rendered text within the budget and says it was cut'
       : `KNOWN GAP: ${giant.knownToExceed}`,
     async () => {
-      harness = await createHarness({ routes: giant.routes, config: { outputCharBudget: BUDGET } });
+      harness = await createHarness({
+        routes: giant.routes,
+        config: { outputCharBudget: BUDGET, ...giant.config },
+      });
       await harness.client.listTools();
 
       const result = await callTool(harness, giant.name, giant.args);

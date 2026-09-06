@@ -1,5 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ToolContext, ToolModule } from '../lib/tool.js';
+import { betaTools } from './beta.js';
 import { listCiArtifactsTool } from './ci-artifacts.js';
 import { listCiSecretsTool, listCiVariablesTool } from './ci-config.js';
 import { diagnoseCiFailureTool } from './ci-diagnose.js';
@@ -39,15 +40,28 @@ export const readOnlyTools: readonly ToolModule[] = [
  */
 export const mutatingTools: readonly ToolModule[] = [];
 
+export { betaTools };
+
 export interface RegistrationSummary {
   readonly readOnly: string[];
+  /** Read-only tools over beta Depot APIs; empty unless DEPOT_MCP_ENABLE_BETA is set. */
+  readonly beta: string[];
   readonly mutating: string[];
   readonly writesEnabled: boolean;
+  readonly betaEnabled: boolean;
 }
 
 export function registerTools(server: McpServer, context: ToolContext): RegistrationSummary {
   for (const tool of readOnlyTools) {
     tool.register(server, context);
+  }
+
+  const beta: string[] = [];
+  if (context.config.enableBeta) {
+    for (const tool of betaTools) {
+      tool.register(server, context);
+      beta.push(tool.name);
+    }
   }
 
   const mutating: string[] = [];
@@ -60,7 +74,9 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
 
   return {
     readOnly: readOnlyTools.map((tool) => tool.name),
+    beta,
     mutating,
     writesEnabled: context.config.allowWrites,
+    betaEnabled: context.config.enableBeta,
   };
 }

@@ -36,6 +36,7 @@ describe('loadConfig', () => {
       orgId: undefined,
       projectId: undefined,
       allowWrites: false,
+      enableBeta: false,
       maxLogPages: DEFAULT_MAX_LOG_PAGES,
       outputCharBudget: DEFAULT_OUTPUT_CHAR_BUDGET,
     });
@@ -59,6 +60,20 @@ describe('loadConfig', () => {
         false,
       );
     }
+  });
+
+  it('accepts the same truthy spellings for the beta gate and defaults it off', () => {
+    expect(loadConfig({ DEPOT_TOKEN: 't' }).enableBeta).toBe(false);
+    for (const value of ['1', 'true', 'TRUE', 'yes', 'on', ' on ']) {
+      expect(loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ENABLE_BETA: value }).enableBeta, value).toBe(true);
+    }
+    for (const value of ['0', 'false', 'no', 'off', '', 'beta']) {
+      expect(loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ENABLE_BETA: value }).enableBeta, value).toBe(false);
+    }
+    // The two gates are independent.
+    const config = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ENABLE_BETA: '1' });
+    expect(config.allowWrites).toBe(false);
+    expect(config.enableBeta).toBe(true);
   });
 
   it('rejects a token with a line break or space without echoing it', () => {

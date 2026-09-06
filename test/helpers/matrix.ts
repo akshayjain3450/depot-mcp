@@ -117,3 +117,30 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     routes: { [RPC.listVariables]: ok(fixture('variables')) },
   },
 ];
+
+/** The same, for the tools registered only when DEPOT_MCP_ENABLE_BETA is set. */
+export const BETA_TOOL_MATRIX: readonly ToolInvocation[] = [
+  {
+    name: 'depot_list_sandboxes',
+    args: { states: ['running', 'failed'] },
+    routes: { [RPC.listSandboxes]: ok(fixture('sandboxes')) },
+  },
+  {
+    name: 'depot_get_sandbox',
+    args: { sandboxId: 'sbx_01j9hzzz0a1b2c3d4e5f' },
+    routes: { [RPC.getSandbox]: ok(fixture('sandbox')) },
+  },
+  {
+    name: 'depot_list_registry_repositories',
+    args: {},
+    routes: {
+      [RPC.listRegistryRepositories]: ok(fixture('registry-repositories')),
+      [RPC.getRegistryRetentionPolicy]: ok(fixture('registry-retention-policy')),
+    },
+  },
+  {
+    name: 'depot_get_registry_image',
+    args: { repository: 'acme/api', tag: 'main' },
+    routes: { [RPC.getRegistryImageDetail]: ok(fixture('registry-image-detail')) },
+  },
+];

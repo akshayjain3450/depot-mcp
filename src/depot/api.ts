@@ -17,6 +17,8 @@ const CORE_BUILD = 'depot.core.v1.BuildService';
 const CORE_USAGE = 'depot.core.v1.UsageService';
 const BUILD = 'depot.build.v1.BuildService';
 const BUILD_REGISTRY = 'depot.build.v1.RegistryService';
+const SANDBOX = 'depot.sandbox.v1.SandboxService';
+const REGISTRY = 'depot.registry.v1beta1.RegistryService';
 
 function rpc(service: string, method: string): RpcTarget {
   return { service, method };
@@ -83,6 +85,37 @@ export interface BuildStepLogsRequest extends BuildStepsRequest {
 export interface UsageWindow {
   startAt: string;
   endAt: string;
+}
+
+/**
+ * From depot/sandbox-sdk sandbox.proto. Protobuf JSON spells enum values by their full name, and
+ * Depot's JSON binding accepted `SANDBOX_STATUS_RUNNING` inside `filter.states` on 2026-09-06.
+ */
+export interface ListSandboxesRequest {
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+  filter?:
+    | {
+        states?: string[] | undefined;
+        createdAfter?: string | undefined;
+        createdBefore?: string | undefined;
+      }
+    | undefined;
+}
+
+/** The registry service pages by number (`page`, `pageSize`, `hasMore`), not by token. */
+export interface RegistryPageRequest {
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  query?: string | undefined;
+}
+
+export interface ListRegistryImagesRequest {
+  repository: string;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  tagQuery?: string | undefined;
+  tagStatus?: string | undefined;
 }
 
 /**
@@ -225,5 +258,37 @@ export class DepotApi {
 
   listVariables(): Promise<JsonObject> {
     return this.client.call(rpc(VARIABLES, 'ListVariables'), {});
+  }
+
+  // Beta surfaces below. Both services answered the JSON binding with an Organization token on
+  // 2026-09-06 (empty lists on a trial organization; `not_found` for unknown ids), so no binary
+  // codec is needed. They are reachable only through tools gated by DEPOT_MCP_ENABLE_BETA.
+
+  listSandboxes(request: ListSandboxesRequest = {}): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'ListSandboxes'), { ...request });
+  }
+
+  /** GetSandbox takes a SandboxRef, whose only selector today is `id`. */
+  getSandbox(sandboxId: string): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'GetSandbox'), { id: sandboxId });
+  }
+
+  listRegistryRepositories(request: RegistryPageRequest = {}): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'ListRepositories'), { ...request });
+  }
+
+  /** Answers `invalid_argument: Invalid repository` unless `repository` is set (observed live). */
+  listRegistryImages(request: ListRegistryImagesRequest): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'ListImages'), { ...request });
+  }
+
+  /** `reference` is a tag or a digest. */
+  getRegistryImageDetail(request: { repository: string; reference: string }): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'GetImageDetail'), { ...request });
+  }
+
+  /** An empty object means no policy is configured for the repository. */
+  getRegistryRetentionPolicy(repository: string): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'GetRetentionPolicy'), { repository });
   }
 }

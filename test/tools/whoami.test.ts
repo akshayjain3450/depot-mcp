@@ -28,6 +28,10 @@ describe('depot_whoami', () => {
     expect(result.structured.projectCount).toBe(2);
     expect(result.structured.writesEnabled).toBe(false);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
+    expect(result.structured.betaEnabled).toBe(false);
+    expect(result.structured.betaTools).toEqual([]);
+    expect(result.text).toContain('Beta tools: not registered');
+    expect(result.text).toContain('DEPOT_MCP_ENABLE_BETA');
     expect(result.text).toContain('Acme Engineering');
     expect(result.text).toContain('<- active');
   });
@@ -175,6 +179,29 @@ describe('depot_whoami', () => {
     expect(result.structured.writesEnabled).toBe(true);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
     expect(JSON.stringify(result.structured.warnings)).toContain('no effect');
+  });
+
+  it('names the beta tools when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { enableBeta: true },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.betaEnabled).toBe(true);
+    expect(result.structured.betaTools).toEqual([
+      'depot_list_sandboxes',
+      'depot_get_sandbox',
+      'depot_list_registry_repositories',
+      'depot_get_registry_image',
+    ]);
+    expect(result.text).toContain('Beta tools: enabled by DEPOT_MCP_ENABLE_BETA');
+    expect(result.text).toContain('may change without notice');
+    expect(result.structured.warnings).toEqual([]);
   });
 
   it('explains a token that authenticates but sees nothing', async () => {

@@ -1,0 +1,26 @@
+{
+  "sandbox": {
+    "sandboxId": "sbx_01j9hzzz0a1b2c3d4e5f",
+    "organizationId": "org_1a2b3c",
+    "status": "SANDBOX_STATUS_FAILED",
+    "createdAt": "2026-09-05T22:40:10Z",
+    "startedAt": "2026-09-05T22:40:55Z",
+    "stoppedAt": "2026-09-05T22:41:30Z",
+    "activeCpuUsageMs": "31250",
+    "networkUsage": {
+      "ingressBytes": "48213",
+      "egressBytes": "1024"
+    },
+    "resources": {
+      "vcpus": 2,
+      "memoryMb": 4096,
+      "diskGb": 20
+    },
+    "runtime": {
+      "imageRef": "ghcr.io/acme/agent-runtime:python312"
+    },
+    "exitCode": 137,
+    "errorMessage": "container killed: out of memory",
+    "env": {}
+  }
+}

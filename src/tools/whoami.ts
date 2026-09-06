@@ -4,6 +4,7 @@ import { readObjectArray, readString } from '../depot/shape.js';
 import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
+import { betaTools } from './beta.js';
 
 const PROJECT_PREVIEW_LIMIT = 25;
 
@@ -41,7 +42,7 @@ export const whoamiTool = defineTool({
 
 Call this first whenever another Depot tool returns an empty list or a permission error. Depot's most common confusing failure is a token that spans several organizations with none selected: requests then resolve against the wrong organization and return empty results rather than an error. This tool says plainly whether that is happening and what to set.
 
-Also reports whether write tools are enabled. This version of the server ships no mutating tools at all, so the answer is always that nothing can be modified.
+Also reports whether write tools are enabled (this version of the server ships no mutating tools at all, so the answer is always that nothing can be modified) and whether the beta sandbox and registry tools are registered (DEPOT_MCP_ENABLE_BETA).
 
 Never returns the token or any part of it.`,
   inputSchema: {},
@@ -56,6 +57,8 @@ Never returns the token or any part of it.`,
     projects: z.array(z.object({ projectId: z.string().optional(), name: z.string().optional() })),
     writesEnabled: z.boolean(),
     mutatingToolsAvailable: z.literal(0),
+    betaEnabled: z.boolean(),
+    betaTools: z.array(z.string()),
     warnings: z.array(z.string()),
     failures: z.array(z.object({ check: z.string(), detail: z.string() })),
   },
@@ -201,6 +204,9 @@ Never returns the token or any part of it.`,
     text.push(
       '',
       'Writes: this server version registers no mutating tools, so nothing here can retry, cancel, rerun, or delete anything.',
+      context.config.enableBeta
+        ? `Beta tools: enabled by DEPOT_MCP_ENABLE_BETA (${betaTools.map((tool) => tool.name).join(', ')}). They are read-only but built on Depot APIs that may change without notice.`
+        : 'Beta tools: not registered. Set DEPOT_MCP_ENABLE_BETA=1 to add the read-only sandbox and registry tools built on Depot\'s beta APIs.',
     );
 
     if (warnings.length > 0) {
@@ -231,6 +237,8 @@ Never returns the token or any part of it.`,
           .map((project) => ({ projectId: project.projectId, name: project.name })),
         writesEnabled: context.config.allowWrites,
         mutatingToolsAvailable: 0 as const,
+        betaEnabled: context.config.enableBeta,
+        betaTools: context.config.enableBeta ? betaTools.map((tool) => tool.name) : [],
         warnings,
         failures,
       },

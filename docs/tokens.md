@@ -24,10 +24,16 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_list_builds` | yes | **no** |
 | `depot_diagnose_build` | yes | **no** (needs `GetBuild`, which refuses user tokens; the step endpoints themselves accept them) |
 | `depot_get_usage` | yes | **no** |
+| Beta `depot_list_sandboxes` (`DEPOT_MCP_ENABLE_BETA`) | yes | not tested |
+| Beta `depot_get_sandbox` | yes | not tested |
+| Beta `depot_list_registry_repositories` | yes | not tested |
+| Beta `depot_get_registry_image` | yes | not tested |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 
 Project tokens run nothing here: Depot's own scope matrix excludes them from Depot CI and from the API.
+
+The beta rows were verified on 2026-09-06 with an Organization token only; the trial organization used for verification had no user token to hand, so the user-token column for those services is unknown rather than known-refused. The beta tools stay behind `DEPOT_MCP_ENABLE_BETA` until that column is filled in.
 
 ## By Depot service
 
@@ -43,6 +49,8 @@ For anyone extending the server. "Refuses" means Depot answers `401 unauthentica
 | `depot.build.v1.RegistryService` (`ListImages`) | accepts | accepts |
 | `depot.ci.v1.CIService` (runs, logs, metrics, artifacts, diagnosis) | accepts | accepts |
 | `depot.ci.v3beta2` secrets and variables | accepts | accepts for admins and owners; `403` for members |
+| `depot.sandbox.v1.SandboxService` (`ListSandboxes`, `GetSandbox`) | accepts | not tested |
+| `depot.registry.v1beta1.RegistryService` (`ListRepositories`, `ListImages`, `GetImageDetail`, `GetRetentionPolicy`, `ListTokens`) | accepts | not tested |
 
 Two consequences follow:
 

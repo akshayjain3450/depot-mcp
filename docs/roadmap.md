@@ -7,9 +7,9 @@ Two constraints shape every decision here:
 - **Depot has no read-only token.** Any token that can list runs can also cancel them and delete projects. The tool list is the only safety boundary, so every write is opt-in and every irreversible operation is excluded outright.
 - **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The roadmap ends at 42, with the gated ones invisible unless enabled.
 
-## Today: 16 tools, 2 prompts
+## Today: 16 tools, 2 prompts, plus 4 beta-gated tools
 
-All read-only, all registered unconditionally.
+All read-only. The first sixteen are registered unconditionally; the beta four only when `DEPOT_MCP_ENABLE_BETA` is set.
 
 | Group | Tool | Depot RPCs |
 | --- | --- | --- |
@@ -29,6 +29,17 @@ All read-only, all registered unconditionally.
 | Registry | `depot_list_images` | `ListImages` |
 | CI config | `depot_list_ci_secrets` | `ListSecrets` (names and scoping only) |
 | CI config | `depot_list_ci_variables` | `ListVariables` (values redacted when credential-shaped) |
+
+Beta-gated, read-only, verified live 2026-09-06 with an Organization token (empty lists on the trial organization; Depot's own `not_found` for unknown ids), user token untested:
+
+| Group | Tool | Depot RPCs |
+| --- | --- | --- |
+| Sandboxes | `depot_list_sandboxes` | `depot.sandbox.v1.SandboxService/ListSandboxes` |
+| Sandboxes | `depot_get_sandbox` | `depot.sandbox.v1.SandboxService/GetSandbox` |
+| Registry | `depot_list_registry_repositories` | `depot.registry.v1beta1.RegistryService/ListRepositories`, `GetRetentionPolicy` per repository |
+| Registry | `depot_get_registry_image` | `depot.registry.v1beta1.RegistryService/GetImageDetail` (manifest decoded in this server) |
+
+Probed and accepted but not exposed: `RegistryService/ListImages` (needs a `repository`; `depot_list_images` already covers the per-project view through `depot.build.v1`) and `RegistryService/ListTokens` (credential inventory; left out until it is verified to return no secret material, like `depot_list_project_tokens` below).
 
 Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
 
@@ -51,7 +62,7 @@ Twelve always-on tools, ordered by value.
 | `depot_list_project_tokens` | `ListTokens` | Credential inventory: id, description, created. Must be verified live to return no secret material before shipping. |
 | `depot_audit_trust_policies` | `ListProjects`, `ListTrustPolicies` | Which external CI identities can build into which project, organization-wide. |
 
-Five more behind a beta flag until verified live with both token kinds, because their APIs are private beta or documented only in protos: `depot_list_sandboxes`, `depot_get_sandbox` (`depot.sandbox.v1`), `depot_list_registry_repositories`, `depot_get_registry_image` (`depot.registry.v1beta1`), and `depot_list_test_results` (only reachable by shelling out to `depot tests --output json`, so it also needs the CLI).
+Five more behind a beta flag until verified live with both token kinds, because their APIs are private beta or documented only in protos. **Four are shipped** behind `DEPOT_MCP_ENABLE_BETA` (see Today): `depot_list_sandboxes`, `depot_get_sandbox` (`depot.sandbox.v1`), `depot_list_registry_repositories`, `depot_get_registry_image` (`depot.registry.v1beta1`); they stay gated until a user token has been tried against both services. Still pending: `depot_list_test_results` (only reachable by shelling out to `depot tests --output json`, so it also needs the CLI).
 
 Deliberately not added: standalone secret and variable getters (the list tools with filters already answer the question), organization details (no RPC beyond `ListOrganizations`, which Organization tokens cannot call), and the log streaming RPCs (Depot caps concurrent streams per organization, so a careless tool could starve real CI).
 
@@ -108,7 +119,7 @@ Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagn
 | --- | --- | --- | --- |
 | Today (0.1) | 16 | 2 | 0 |
 | 0.2 reads, always on | +12 | +5 | +4 |
-| 0.2 reads, beta-gated | +5 | | |
+| 0.2 reads, beta-gated | +5 (4 shipped) | | |
 | 0.3 writes, flag-gated | +9 | | |
 | End of roadmap | 42 | 7 | 4 |
 

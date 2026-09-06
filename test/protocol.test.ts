@@ -10,11 +10,12 @@ import { z } from 'zod';
 import { asObject } from '../src/depot/shape.js';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
 import { callTool, createHarness, type Harness } from './helpers/harness.js';
-import { TOOL_MATRIX } from './helpers/matrix.js';
+import { BETA_TOOL_MATRIX, TOOL_MATRIX } from './helpers/matrix.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOOL_NAME = /^depot_[a-z0-9]+(?:_[a-z0-9]+)*$/;
 const EXPECTED_TOOL_COUNT = 16;
+const EXPECTED_BETA_TOOL_COUNT = 4;
 
 let harness: Harness | undefined;
 
@@ -243,6 +244,71 @@ describe('tools/call', () => {
     expect(outcome.detail).toMatch(/not found/i);
     expect(harness.calls).toHaveLength(0);
   });
+});
+
+describe('beta tools (DEPOT_MCP_ENABLE_BETA)', () => {
+  it(`stays at ${EXPECTED_TOOL_COUNT} tools with the flag off, so the beta matrix is not covered by default`, async () => {
+    harness = await createHarness({ routes: {} });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+    for (const entry of BETA_TOOL_MATRIX) {
+      expect(names).not.toContain(entry.name);
+    }
+  });
+
+  it(`adds exactly ${EXPECTED_BETA_TOOL_COUNT} well-named, read-only tools with the flag on, all covered by the beta matrix`, async () => {
+    harness = await createHarness({ routes: {}, config: { enableBeta: true } });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT + EXPECTED_BETA_TOOL_COUNT);
+    expect(new Set(names).size).toBe(names.length);
+    expect(names.sort()).toEqual(
+      [...TOOL_MATRIX, ...BETA_TOOL_MATRIX].map((entry) => entry.name).sort(),
+    );
+    for (const tool of tools) {
+      expect(tool.name, tool.name).toMatch(TOOL_NAME);
+      const annotations = tool.annotations ?? {};
+      expect(annotations.readOnlyHint, tool.name).toBe(true);
+      expect(annotations.destructiveHint, tool.name).toBe(false);
+      expect(annotations.idempotentHint, tool.name).toBe(true);
+      expect(tool.title, tool.name).toBe(annotations.title);
+      expect(tool.inputSchema.type, tool.name).toBe('object');
+      for (const [property, schema] of Object.entries(asObject(tool.inputSchema.properties) ?? {})) {
+        const description = asObject(schema)?.description;
+        expect(typeof description, `${tool.name}.${property}`).toBe('string');
+        expect(String(description).trim().length, `${tool.name}.${property}`).toBeGreaterThan(10);
+      }
+      expect(Object.keys(asObject(asObject(tool.outputSchema)?.properties) ?? {}).length, tool.name).toBeGreaterThan(0);
+    }
+  });
+
+  it('says in every beta description that the API is beta and may change', async () => {
+    harness = await createHarness({ routes: {}, config: { enableBeta: true } });
+    const { tools } = await harness.client.listTools();
+
+    for (const entry of BETA_TOOL_MATRIX) {
+      const tool = tools.find((candidate) => candidate.name === entry.name);
+      expect(tool?.description ?? '', entry.name).toMatch(/beta/i);
+      expect(tool?.description ?? '', entry.name).toMatch(/may change/i);
+    }
+  });
+
+  it.each(BETA_TOOL_MATRIX)(
+    '$name returns text plus structured content that validates against its output schema',
+    async ({ name, args, routes }) => {
+      harness = await createHarness({ routes, config: { enableBeta: true } });
+      await harness.client.listTools();
+
+      const result = await callTool(harness, name, args);
+
+      expect(result.isError, result.text).toBe(false);
+      expect(result.text.trim().length).toBeGreaterThan(0);
+      expect(Object.keys(result.structured).length).toBeGreaterThan(0);
+    },
+  );
 });
 
 describe('prompts', () => {

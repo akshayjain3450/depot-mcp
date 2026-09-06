@@ -13,6 +13,12 @@ export interface DepotMcpConfig {
    * version can add them without reworking registration.
    */
   readonly allowWrites: boolean;
+  /**
+   * Gate for tools built on Depot APIs that Depot itself labels beta or publishes only as protos
+   * (`depot.sandbox.v1`, `depot.registry.v1beta1`). Off by default so a client never sees a tool
+   * whose upstream contract may change without notice.
+   */
+  readonly enableBeta: boolean;
   readonly maxLogPages: number;
   readonly outputCharBudget: number;
 }
@@ -147,6 +153,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DepotMcpConfig
     orgId: readOptional(env.DEPOT_ORG_ID),
     projectId: readOptional(env.DEPOT_PROJECT_ID),
     allowWrites: readBooleanFlag(env.DEPOT_MCP_ALLOW_WRITES),
+    enableBeta: readBooleanFlag(env.DEPOT_MCP_ENABLE_BETA),
     maxLogPages: readPositiveInt(
       env.DEPOT_MCP_MAX_LOG_PAGES,
       DEFAULT_MAX_LOG_PAGES,

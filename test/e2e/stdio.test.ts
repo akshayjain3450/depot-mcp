@@ -208,7 +208,28 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     }
     expect(spawned.stdout()).not.toContain('dummy-token-e2e');
     expect(spawned.stderr()).not.toContain('dummy-token-e2e');
-    expect(spawned.stderr()).toContain('16 read-only tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('16 read-only tool(s), 0 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).not.toContain('DEPOT_MCP_ENABLE_BETA is set');
+  });
+
+  it('answers tools/list with 20 tools and names the beta ones on stderr when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy-token-e2e', DEPOT_MCP_ENABLE_BETA: '1' });
+    await initialize(spawned);
+
+    const reply = nextStdoutLine(spawned, 'tools/list response');
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
+    const list = JSON.parse(await reply) as { result?: { tools?: Array<{ name: string }> } };
+
+    expect(list.result?.tools).toHaveLength(20);
+    expect(list.result?.tools?.map((tool) => tool.name)).toContain('depot_list_sandboxes');
+
+    spawned.child.stdin?.end();
+    const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
+    expect(exit.code).toBe(0);
+    expect(spawned.stderr()).toContain('16 read-only tool(s), 4 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ENABLE_BETA is set: depot_list_sandboxes');
+    expect(spawned.stderr()).not.toContain('dummy-token-e2e');
   });
 
   it('warns on stderr that DEPOT_MCP_ALLOW_WRITES has no effect', async () => {

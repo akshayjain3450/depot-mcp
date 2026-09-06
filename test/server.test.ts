@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
-import { mutatingTools, readOnlyTools } from '../src/tools/index.js';
+import { betaTools, mutatingTools, readOnlyTools } from '../src/tools/index.js';
 import { createHarness, type Harness } from './helpers/harness.js';
 
 const PACKAGE_JSON = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
@@ -105,6 +105,33 @@ describe('server registration', () => {
 
     expect(tools).toHaveLength(readOnlyTools.length);
     expect(tools.map((tool) => tool.name)).not.toContain('depot_retry_ci_failed_jobs');
+  });
+
+  it('registers no beta tool unless DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({ routes: {} });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(betaTools).toHaveLength(4);
+    for (const tool of betaTools) {
+      expect(names, tool.name).not.toContain(tool.name);
+    }
+  });
+
+  it('registers every beta tool after the read-only set when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({ routes: {}, config: { enableBeta: true } });
+    const { tools } = await harness.client.listTools();
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      ...readOnlyTools.map((tool) => tool.name),
+      ...betaTools.map((tool) => tool.name),
+    ]);
+    for (const tool of tools) {
+      expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+      expect(tool.annotations?.destructiveHint, tool.name).toBe(false);
+      const verb = tool.name.replace(/^depot_/, '').split('_')[0] ?? '';
+      expect(MUTATING_WORDS, tool.name).not.toContain(verb);
+    }
   });
 
   it('registers the diagnostic prompts', async () => {

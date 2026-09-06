@@ -21,4 +21,11 @@ export const RPC = {
   getArtifactDownloadUrl: 'depot.ci.v1.CIService/GetArtifactDownloadURL',
   listSecrets: 'depot.ci.v3beta2.SecretService/ListSecrets',
   listVariables: 'depot.ci.v3beta2.VariableService/ListVariables',
+  // Beta surfaces, reachable only with DEPOT_MCP_ENABLE_BETA.
+  listSandboxes: 'depot.sandbox.v1.SandboxService/ListSandboxes',
+  getSandbox: 'depot.sandbox.v1.SandboxService/GetSandbox',
+  listRegistryRepositories: 'depot.registry.v1beta1.RegistryService/ListRepositories',
+  listRegistryImages: 'depot.registry.v1beta1.RegistryService/ListImages',
+  getRegistryImageDetail: 'depot.registry.v1beta1.RegistryService/GetImageDetail',
+  getRegistryRetentionPolicy: 'depot.registry.v1beta1.RegistryService/GetRetentionPolicy',
 } as const;

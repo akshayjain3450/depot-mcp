@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- `DEPOT_MCP_ENABLE_BETA` registers four read-only tools built on Depot APIs that are published only as protos, one of them beta in its name. They are hidden unless the flag is set, every description says the API may change, and `depot_whoami` reports whether they are on (`betaEnabled`, `betaTools`). Verified live on 2026-09-06 with an Organization token; a user token has not been tried.
+  - `depot_list_sandboxes` and `depot_get_sandbox` (`depot.sandbox.v1.SandboxService/ListSandboxes`, `GetSandbox`): sandbox state, runtime image, resources, timing, exit code, error, metered usage. State filter and creation-time window; token paging. Environment variables are returned by name only, never by value.
+  - `depot_list_registry_repositories` (`depot.registry.v1beta1.RegistryService/ListRepositories` plus `GetRetentionPolicy` per repository, optional) and `depot_get_registry_image` (`GetImageDetail`, by tag or digest; the raw OCI manifest is base64-decoded and summarised into platforms or layers).
+- The startup banner counts beta tools, and the CI stdio smoke checks the count with the flag on or off.
 
 ## [0.1.1] - 2026-09-06
 

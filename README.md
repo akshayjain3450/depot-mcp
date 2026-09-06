@@ -62,6 +62,7 @@ As of 2026-09-05 no standalone Depot MCP server exists (first-party or otherwise
 
 - **Read-only.** v1 registers no tool that can change anything. There is no retry, cancel, rerun, dispatch, delete, or token-minting tool.
 - **Depot CI is beta**, per Depot's own documentation. The CI tools are the most valuable ones here and also the most likely to shift under you.
+- **Four beta tools are opt-in.** `DEPOT_MCP_ENABLE_BETA=1` adds read-only tools for Depot sandboxes (`depot.sandbox.v1`) and the Depot registry (`depot.registry.v1beta1`). Those APIs are published only as protos, one of them beta in its name, so the tools stay hidden unless you ask for them; see [Beta](#beta-opt-in).
 - **Verified against a real Depot organization on 2026-09-06.** Every tool was run live with both token kinds, and `depot_diagnose_build` against a real failed build. The one tool not yet exercised against real data is `depot_diagnose_ci_failure`, because the test organization had no Depot CI runs; its request shape was verified against Depot (an unknown id returns Depot's own `not_found`), and its response parsing is covered by fixtures taken from Depot's CLI documentation.
 - **MCP protocol revision `2025-11-25`.** This server is built on the `@modelcontextprotocol/sdk` 1.x line, which speaks `2025-11-25`. The current spec revision is `2026-07-28`, implemented by the v2 packages (`@modelcontextprotocol/server` 2.0.0, published 2026-07-28), which also serve `2025-11-25` clients. Every current client negotiates `2025-11-25`, so nothing is lost today. Moving to v2 is a planned, contained change: the SDK is imported in nine files and the transport wiring lives in `src/index.ts`.
 
@@ -82,6 +83,7 @@ Depot has three kinds of token and they are not interchangeable. Verified live o
 | `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
 | `depot_list_images` | yes | yes |
 | `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
+| Beta: `depot_list_sandboxes`, `depot_get_sandbox`, `depot_list_registry_repositories`, `depot_get_registry_image` | yes | not tested yet |
 | Project token | runs nothing | |
 
 The full matrix, per tool and per Depot service, with how to obtain each token, is in [docs/tokens.md](./docs/tokens.md). `depot_whoami` reports which kind it holds and names the tools that will not work.
@@ -397,6 +399,7 @@ Every setting is an environment variable, set in your client's config.
 | `DEPOT_API_URL` | no | `https://api.depot.dev` | Override the API endpoint. Must be `https://`; plain `http://` is accepted only for localhost, for running against a stub. |
 | `DEPOT_MCP_MAX_LOG_PAGES` | no | `20` | Cap on log/step pages fetched per tool call, so one call can't walk a gigabyte of logs. |
 | `DEPOT_MCP_OUTPUT_BUDGET` | no | `24000` | Hard character ceiling on any single tool result. |
+| `DEPOT_MCP_ENABLE_BETA` | no | `0` | Also register the four read-only [beta tools](#beta-opt-in) for Depot sandboxes and the Depot registry. Off by default because their Depot APIs may change without notice. `depot_whoami` reports whether it is on. |
 | `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing; `depot_whoami` will say so. |
 
 Each Depot API call has an overall deadline of about 40 seconds, with a bounded number of retries (exponential backoff) for `unavailable`, `deadline_exceeded`, `aborted`, and 429 responses. `invalid_argument`, `not_found`, `permission_denied`, and `failed_precondition` are never retried. A tool that makes several calls (log paging, build diagnosis) can therefore take longer than one deadline; it reports partial results rather than failing outright when a later page times out.
@@ -407,7 +410,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 16 tools, and the 4 [beta tools](#beta-opt-in) behind `DEPOT_MCP_ENABLE_BETA`, are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -439,6 +442,19 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | `depot_get_project` | One project's full config plus its OIDC trust policies. |
 | `depot_list_images` | What is in this project's registry, with digests and sizes? |
 | `depot_get_usage` | What is driving spend? Build minutes, minutes saved by cache, GitHub Actions runner minutes, storage, sandboxes. Dates are UTC; a date-only `endAt` includes that whole day. |
+
+### Beta (opt-in)
+
+Registered only when `DEPOT_MCP_ENABLE_BETA=1`. They are read-only like everything else, but they sit on Depot APIs that Depot publishes only as protos (`depot.sandbox.v1`, `depot.registry.v1beta1`, beta in its name), so field names, states, and paging can change under them without a Depot changelog entry. Every description says so. Verified live on 2026-09-06 with an Organization token: each RPC answered the JSON binding (empty lists on a trial organization, Depot's own `not_found` for unknown ids).
+
+| Tool | Answers |
+| --- | --- |
+| `depot_list_sandboxes` | Which Depot sandboxes exist, in what state, on which image, with what resources? Filter by state and creation time; token paging. Environment variables are reported by name only. |
+| `depot_get_sandbox` | One sandbox's lifecycle timing, exit code, error message, metered CPU and network usage, and environment variable names. Never values. |
+| `depot_list_registry_repositories` | Which repositories are in the organization's registry, how big, when last pushed, and does each have a retention policy? Pages by number (`page`, `hasMore`). |
+| `depot_get_registry_image` | What does this repository tag or digest point at? Digest, size, tags, push time, and the manifest summarised: platforms of a multi-platform index, or layer count and config digest of a single image. |
+
+Not exposed, deliberately: sandbox creation, command execution, stop, kill, or timeout changes; registry token listing or creation; any deletion. The fifth beta tool in the [roadmap](./docs/roadmap.md), `depot_list_test_results`, needs the `depot` CLI and is not built.
 
 ### Prompts
 
@@ -504,6 +520,7 @@ One process, one credential, no listening port, no protobuf toolchain. Depot's C
 | `depot_diagnose_ci_failure` returns `state: empty` | The run had no failures Depot could cluster, or the ID is not a failed run. `depot_list_ci_runs` with `status: ["failed"]` finds one. |
 | `state: over_limit` | The target is too broad. The result lists `narrowerTargets`; re-call with a workflow or job ID. |
 | Result says `truncated: true` | Expected. Use the `hint` in the result (narrower filter, `grep`, `pageToken`) or raise `DEPOT_MCP_OUTPUT_BUDGET`. |
+| `depot_list_sandboxes` or a registry repository tool is not in the tool list | They are beta and off by default. Set `DEPOT_MCP_ENABLE_BETA=1` in the server's `env`; `depot_whoami` confirms whether it is on. |
 | Client shows "response was interrupted" or context errors | The client's own MCP output cap. Prefer the diagnose tools over raw logs, lower `tailLines`, or use `grep`. |
 | `npx` hangs on first run | It is downloading the package. Run `npx -y depot-mcp` once in a terminal, then restart the client. |
 | Nothing in the client but the Inspector works | stdout must carry only JSON-RPC. If you added logging, send it to stderr. |
@@ -523,6 +540,7 @@ npm test            # vitest, no network or Depot account needed
 npm run build       # emit dist/
 npm run inspect     # build, then open the MCP Inspector
 npm run smoke:stdio # handshake + tools/list against dist/, no token needed
+DEPOT_MCP_ENABLE_BETA=1 npm run smoke:stdio   # the same with the four beta tools registered
 ```
 
 Tests drive a real `Client` against a real `McpServer` over the SDK's `InMemoryTransport`, with `fetch` stubbed to return recorded fixtures in `test/fixtures/`. They assert the full round trip: input validation, output-schema conformance, annotations, character budgets, and error translation. The fixtures cover all four `GetFailureDiagnosis` states (`focused_failure`, `grouped_failures`, `over_limit`, `empty`), empty results, and Connect error envelopes.
@@ -556,7 +574,8 @@ src/
     ci-target.ts    loose identifier resolution
     redact.ts       credential scrubbing
     build.ts  project.ts  resolve.ts  time.ts
-  tools/            one module per tool group; index.ts holds the write gate
+  tools/            one module per tool group; index.ts holds the write and beta gates
+                    (beta.ts lists sandboxes.ts and registry-beta.ts)
 test/               vitest: unit, tool round-trips over InMemoryTransport, fixtures
 docs/               design notes and distribution details
 research/           the API and design research this was built from
