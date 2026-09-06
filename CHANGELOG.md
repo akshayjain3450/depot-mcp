@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.1] - 2026-09-06
+
+First release published with npm trusted publishing (no stored token).
+
 ### Fixed
 
 - First live Depot CI run: Depot's diagnosis document uses longer enum names than the CLI's JSON (`FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES`, `FAILURE_DIAGNOSIS_TARGET_TYPE_RUN`, `DRILL_DOWN_COMMAND_KIND_LOGS`, and so on); they now normalise to `grouped_failures`, `run`, `logs`, so states read correctly and next-step commands map to tools.
@@ -72,5 +78,6 @@ First release.
 - Untrusted CI content (logs, summaries, Depot's AI diagnosis and suggested fix) is fenced and labelled in tool summaries, and the server instructions tell the model to treat it as data.
 - Credential redaction rewritten: unanchored vendor patterns (GitHub, GitLab, AWS, Google, Slack, Stripe, OpenAI, Anthropic, npm, PyPI, Docker Hub, Vault, Depot, JWT, Bearer/Basic, PEM), structural rules (`user:pass@` URLs, `password=`-style fragments), a length rule, and a windowed entropy rule that no longer over-redacts URLs, paths, image references, semver strings, or git SHAs. Name matching is segment-based, so `AUTHOR_NAME` and `CERT_PATH` are no longer redacted while `DB_PASS` and `SLACK_WEBHOOK` are.
 
-[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/akshayjain3450/depot-mcp/releases/tag/v0.1.0
