@@ -12,7 +12,15 @@ import process from 'node:process';
 import { createInterface } from 'node:readline';
 
 const EXPECTED_TOOL_COUNT = 16;
-const EXPECTED_PROMPTS = ['diagnose-latest-failure', 'explain-build-slowness'];
+const EXPECTED_PROMPTS = [
+  'cache-audit',
+  'compare-ci-runs',
+  'debug-missing-secret',
+  'diagnose-latest-failure',
+  'explain-build-slowness',
+  'triage-failures-today',
+  'watch-run',
+];
 const PROTOCOL_VERSION = '2025-11-25';
 const TIMEOUT_MS = 20_000;
 

@@ -112,8 +112,13 @@ describe('server registration', () => {
     const { prompts } = await harness.client.listPrompts();
 
     expect(prompts.map((prompt) => prompt.name).sort()).toEqual([
+      'cache-audit',
+      'compare-ci-runs',
+      'debug-missing-secret',
       'diagnose-latest-failure',
       'explain-build-slowness',
+      'triage-failures-today',
+      'watch-run',
     ]);
   });
 

@@ -442,7 +442,28 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 
 ### Prompts
 
-Two prompts chain these into common workflows: `diagnose-latest-failure` (find the last failed run, diagnose it, propose a fix) and `explain-build-slowness` (builds plus usage: is it cache misses or more work?).
+Seven prompts chain the tools into workflows an agent would otherwise have to work out step by step. Every argument is stripped to the characters its kind can contain (a repository to `owner/name`, an id to letters, digits, `.`, `_`, `-`) and JSON-quoted before it is interpolated, so a hostile argument cannot rewrite the instructions.
+
+| Prompt | Arguments | What it does |
+| --- | --- | --- |
+| `diagnose-latest-failure` | `repo?` | Find the last failed run, diagnose it, propose a fix. |
+| `explain-build-slowness` | `projectId?` | Builds plus usage: is it cache misses or more work? |
+| `triage-failures-today` | `repo?`, `hours?` (default 24) | List the window's failed and cancelled runs, group them by repo, workflow and failed jobs, diagnose up to 5 distinct groups, report a table marking each group recurring or new, and say which look safe to retry. It never asks the agent to retry anything; this server cannot. |
+| `compare-ci-runs` | `runA`, `runB` | Run trees and metrics for both, diagnosis of the failing side; reports status diffs, duration and peak memory deltas per job, and failure groups present in one run but not the other. |
+| `cache-audit` | `projectId?` | Projects with their cache policies, the last 20 builds of each, and 30 days of usage; flags hit ratios under 50%, cold builds, and short retention. States that resetting a project's cache is not offered. |
+| `debug-missing-secret` | `name`, `repo`, `branch?`, `workflow?` | `depot_list_ci_secrets` and `depot_list_ci_variables` with the scoping filters; explains which variant would match the job and why it might not see it. |
+| `watch-run` | `runId` | Poll `depot_get_ci_run` until the run finishes (bounded at 20 polls), then diagnose it on failure or list its artifacts on success. |
+
+### Resources
+
+Four read-only resources expose the same data by URI, for clients that attach context with `@` mentions or resource pickers rather than tool calls. Each one calls the same Depot RPC and parser as the matching tool, returns `text/plain`, respects `DEPOT_MCP_OUTPUT_BUDGET`, and turns a Depot error into a readable JSON-RPC error. The templates carry no list callback and nothing subscribes: every read is a fresh request.
+
+| URI | Content |
+| --- | --- |
+| `depot://ci/run/{runId}` | The run's workflow, job and attempt tree, as `depot_get_ci_run` renders it (from `GetRunStatus` only). |
+| `depot://ci/runs/failed` | The 20 most recent failed CI runs, newest first. |
+| `depot://project/{projectId}/builds` | The project's 20 most recent container builds with cache hit ratios. |
+| `depot://projects` | Every project with region, hardware and cache policy. |
 
 ### Output is always bounded
 
@@ -485,7 +506,7 @@ flowchart LR
     Server["depot-mcp<br/>node dist/index.js"]
     API["api.depot.dev<br/>Connect JSON over HTTPS"]
 
-    Client -- "JSON-RPC over stdio<br/>tools/list, tools/call, prompts" --> Server
+    Client -- "JSON-RPC over stdio<br/>tools, prompts, resources" --> Server
     Server -- "POST /depot.ci.v1.CIService/GetFailureDiagnosis<br/>Authorization: Bearer DEPOT_TOKEN<br/>x-depot-org: DEPOT_ORG_ID" --> API
     API -- "JSON, read through tolerant accessors" --> Server
     Server -- "text summary + structuredContent,<br/>capped by DEPOT_MCP_OUTPUT_BUDGET" --> Client

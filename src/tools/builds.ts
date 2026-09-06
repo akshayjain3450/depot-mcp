@@ -1,13 +1,35 @@
 import { z } from 'zod';
 import { DepotApiError } from '../depot/errors.js';
 import { readObjectArray, readString } from '../depot/shape.js';
-import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep, type BuildStep } from '../lib/build.js';
+import {
+  isBuildFailure,
+  parseBuild,
+  parseBuildStep,
+  selectFailingStep,
+  type BuildStep,
+  type BuildSummary,
+} from '../lib/build.js';
 import { keepTailWithinBudget, MAX_LOG_LINE_CHARS, TextBudget, truncateText } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { formatDuration } from '../lib/time.js';
 import { defineTool, ToolInputError, type ToolContext } from '../lib/tool.js';
 
 const PROJECT_SEARCH_LIMIT = 20;
+
+/** One line per build with its cache ratio; shared by depot_list_builds and the builds resource. */
+export function describeBuild(build: BuildSummary): string {
+  const cache =
+    build.totalSteps === undefined
+      ? 'cache unknown'
+      : `${build.cachedSteps ?? 0}/${build.totalSteps} cached${
+          build.cacheHitRatio === undefined ? '' : ` (${Math.round(build.cacheHitRatio * 100)}%)`
+        }`;
+  const saved =
+    build.savedDurationSeconds === undefined
+      ? ''
+      : `, saved ${formatDuration(build.savedDurationSeconds)}`;
+  return `${build.buildId ?? 'unknown id'} — ${build.status ?? 'unknown'} · ${formatDuration(build.buildDurationSeconds)} · ${cache}${saved} · ${build.createdAt ?? 'unknown time'}`;
+}
 const BUILD_SEARCH_PAGE_SIZE = 100;
 const STEP_PAGE_SIZE = 500;
 
@@ -435,17 +457,7 @@ Requires a projectId; DEPOT_PROJECT_ID is used when set, and depot_list_projects
     } else {
       text.push(`${builds.length} container build(s) for project ${projectId}, newest first:`);
       for (const build of builds) {
-        const cache =
-          build.totalSteps === undefined
-            ? 'cache unknown'
-            : `${build.cachedSteps ?? 0}/${build.totalSteps} cached`;
-        const saved =
-          build.savedDurationSeconds === undefined
-            ? ''
-            : `, saved ${formatDuration(build.savedDurationSeconds)}`;
-        text.push(
-          `  ${build.buildId ?? 'unknown id'} — ${build.status ?? 'unknown'} · ${formatDuration(build.buildDurationSeconds)} · ${cache}${saved} · ${build.createdAt ?? 'unknown time'}`,
-        );
+        text.push(`  ${describeBuild(build)}`);
       }
       const failed = builds.find((build) => isBuildFailure(build.status));
       if (failed?.buildId !== undefined) {

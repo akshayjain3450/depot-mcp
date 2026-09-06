@@ -7,7 +7,7 @@ Two constraints shape every decision here:
 - **Depot has no read-only token.** Any token that can list runs can also cancel them and delete projects. The tool list is the only safety boundary, so every write is opt-in and every irreversible operation is excluded outright.
 - **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The roadmap ends at 42, with the gated ones invisible unless enabled.
 
-## Today: 16 tools, 2 prompts
+## Today: 16 tools, 7 prompts, 4 resources
 
 All read-only, all registered unconditionally.
 
@@ -30,7 +30,9 @@ All read-only, all registered unconditionally.
 | CI config | `depot_list_ci_secrets` | `ListSecrets` (names and scoping only) |
 | CI config | `depot_list_ci_variables` | `ListVariables` (values redacted when credential-shaped) |
 
-Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
+Prompts: `diagnose-latest-failure`, `explain-build-slowness`, `triage-failures-today`, `compare-ci-runs`, `cache-audit`, `debug-missing-secret`, and `watch-run`.
+
+Resources, as templates without subscriptions: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, and `depot://projects`.
 
 ## 0.2: read additions
 
@@ -98,16 +100,17 @@ Every write tool follows one pattern:
 
 ## Prompts and resources
 
-Resources, as templates without subscriptions: `depot://ci/run/{runId}` (the run tree), `depot://ci/runs/failed` (last 20 failed runs), `depot://project/{projectId}/builds`, and `depot://projects`.
+Shipped (unreleased, after 0.1.1). Resources, as templates without subscriptions: `depot://ci/run/{runId}` (the run tree), `depot://ci/runs/failed` (last 20 failed runs), `depot://project/{projectId}/builds`, and `depot://projects`. Each reuses the matching tool's Depot call and parser and stays within the output budget.
 
-Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagnose the distinct ones, mark recurring versus new), `compare-ci-runs`, `cache-audit`, `debug-missing-secret` (which variant would match a repo, branch, and workflow, and why the job did not see it), and `watch-run` (wait, then diagnose or list artifacts).
+Prompts: `triage-failures-today` (group the window's failures by repo, workflow and failed jobs, diagnose the distinct ones, mark recurring versus new), `compare-ci-runs`, `cache-audit`, `debug-missing-secret` (which variant would match a repo, branch, and workflow, and why the job did not see it), and `watch-run` (poll `depot_get_ci_run`, then diagnose or list artifacts; it will switch to `depot_wait_for_ci_run` once that tool exists).
 
 ## Counts
 
 | | Tools | Prompts | Resources |
 | --- | --- | --- | --- |
-| Today (0.1) | 16 | 2 | 0 |
-| 0.2 reads, always on | +12 | +5 | +4 |
+| 0.1 | 16 | 2 | 0 |
+| Today (unreleased) | 16 | 7 | 4 |
+| 0.2 reads, always on | +12 | | |
 | 0.2 reads, beta-gated | +5 | | |
 | 0.3 writes, flag-gated | +9 | | |
 | End of roadmap | 42 | 7 | 4 |

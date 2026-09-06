@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { asObject, readObjectArray, readString } from '../depot/shape.js';
 import { TextBudget } from '../lib/budget.js';
-import { parseProject } from '../lib/project.js';
+import { parseProject, type ProjectSummary } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
 
 const projectSchema = z.object({
@@ -17,7 +17,8 @@ const projectSchema = z.object({
   }),
 });
 
-function describeProject(project: z.infer<typeof projectSchema>): string {
+/** One line per project with its cache policy; shared by the project tools and the projects resource. */
+export function describeProject(project: ProjectSummary): string {
   const cache = [
     project.cachePolicy.keepGb === undefined ? undefined : `${project.cachePolicy.keepGb} GB`,
     project.cachePolicy.keepDays === undefined ? undefined : `${project.cachePolicy.keepDays} days`,

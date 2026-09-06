@@ -4,6 +4,7 @@ import type { DepotMcpConfig } from './config.js';
 import { DepotApi } from './depot/api.js';
 import { DepotClient, type FetchLike } from './depot/client.js';
 import { registerPrompts } from './prompts.js';
+import { registerResources } from './resources.js';
 import { registerTools, type RegistrationSummary } from './tools/index.js';
 
 export const SERVER_NAME = 'depot-mcp';
@@ -63,6 +64,7 @@ export function createServer(options: CreateServerOptions): CreatedServer {
   const context = { api: new DepotApi(client), config: options.config };
   const registration = registerTools(server, context);
   registerPrompts(server);
+  registerResources(server, context);
 
   return { server, registration };
 }

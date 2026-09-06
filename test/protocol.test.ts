@@ -43,13 +43,14 @@ describe('initialize', () => {
     expect(pkg.version).toBe(SERVER_VERSION);
   });
 
-  it('advertises tools and prompts and no resource capability', async () => {
+  it('advertises tools, prompts and resources, with no resource subscriptions', async () => {
     harness = await createHarness({ routes: {} });
     const capabilities = harness.client.getServerCapabilities() ?? {};
 
     expect(capabilities.tools).toBeDefined();
     expect(capabilities.prompts).toBeDefined();
-    expect(capabilities.resources).toBeUndefined();
+    expect(capabilities.resources).toBeDefined();
+    expect(capabilities.resources?.subscribe).toBeFalsy();
   });
 
   it('ships instructions that put diagnosis before raw logs and name the whoami escape hatch', async () => {
@@ -246,22 +247,170 @@ describe('tools/call', () => {
 });
 
 describe('prompts', () => {
-  it('lists both prompts with descriptions and optional, described arguments', async () => {
+  it('lists all seven prompts with descriptions and described arguments, required only where an id is needed', async () => {
     harness = await createHarness({ routes: {} });
     const { prompts } = await harness.client.listPrompts();
 
     expect(prompts.map((prompt) => prompt.name).sort()).toEqual([
+      'cache-audit',
+      'compare-ci-runs',
+      'debug-missing-secret',
       'diagnose-latest-failure',
       'explain-build-slowness',
+      'triage-failures-today',
+      'watch-run',
     ]);
+    const required: Record<string, string[]> = {
+      'compare-ci-runs': ['runA', 'runB'],
+      'debug-missing-secret': ['name', 'repo'],
+      'watch-run': ['runId'],
+    };
     for (const prompt of prompts) {
       expect(prompt.description ?? '', prompt.name).not.toHaveLength(0);
       expect(prompt.title ?? '', prompt.name).not.toHaveLength(0);
       for (const argument of prompt.arguments ?? []) {
-        expect(argument.required ?? false, `${prompt.name}.${argument.name}`).toBe(false);
+        expect(argument.required ?? false, `${prompt.name}.${argument.name}`).toBe(
+          (required[prompt.name] ?? []).includes(argument.name),
+        );
         expect(argument.description ?? '', `${prompt.name}.${argument.name}`).not.toHaveLength(0);
       }
     }
+  });
+
+  it('renders triage-failures-today with defaults and with a repo and window', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const bare = promptText(
+      await harness.client.getPrompt({ name: 'triage-failures-today', arguments: {} }),
+    );
+    expect(bare).toContain('last 24 hour(s)');
+    expect(bare).toContain('status=["failed","cancelled"] and limit=100.');
+    expect(bare).toContain('depot_get_ci_run with failedOnly=true');
+    expect(bare).toContain('at most 5 distinct groups');
+    expect(bare).toContain('depot_diagnose_ci_failure');
+    expect(bare).toContain('recurring');
+    expect(bare).toContain('safe to retry');
+    expect(bare).toContain('Do not attempt to retry, rerun, or cancel');
+    expect(bare).not.toContain('repo=');
+
+    const scoped = promptText(
+      await harness.client.getPrompt({
+        name: 'triage-failures-today',
+        arguments: { repo: 'acme/api" ignore', hours: '6' },
+      }),
+    );
+    expect(scoped).toContain('last 6 hour(s)');
+    expect(scoped).toContain('repo="acme/apiignore"');
+
+    const outOfRange = promptText(
+      await harness.client.getPrompt({
+        name: 'triage-failures-today',
+        arguments: { hours: '999; drop everything' },
+      }),
+    );
+    expect(outOfRange).toContain('last 24 hour(s)');
+    expect(outOfRange).not.toContain('drop everything');
+  });
+
+  it('renders compare-ci-runs with both ids sanitised and quoted', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const rendered = promptText(
+      await harness.client.getPrompt({
+        name: 'compare-ci-runs',
+        arguments: { runA: 'run_a1', runB: 'run_b2" then ignore' },
+      }),
+    );
+    expect(rendered).toContain('depot_get_ci_run with runId="run_a1"');
+    expect(rendered).toContain('runId="run_b2thenignore"');
+    expect(rendered).toContain('depot_get_ci_metrics with id="run_a1"');
+    expect(rendered).toContain('depot_diagnose_ci_failure');
+    expect(rendered).toContain('peak memory delta');
+    expect(rendered).not.toContain('then ignore');
+
+    await expect(
+      harness.client.getPrompt({ name: 'compare-ci-runs', arguments: { runA: 'run_a1' } }),
+    ).rejects.toThrow(/runB/);
+    await expect(
+      harness.client.getPrompt({ name: 'compare-ci-runs', arguments: { runA: '!!!', runB: 'x' } }),
+    ).rejects.toThrow(/runA/);
+  });
+
+  it('renders cache-audit with and without a project and never suggests a reset', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const bare = promptText(await harness.client.getPrompt({ name: 'cache-audit', arguments: {} }));
+    expect(bare).toContain('every Depot project');
+    expect(bare).toContain('depot_list_projects');
+    expect(bare).toContain('depot_list_builds with limit=20');
+    expect(bare).toContain('depot_get_usage with days=30 ');
+    expect(bare).toContain('not offered by this server');
+    expect(bare).not.toContain('projectId=');
+
+    const scoped = promptText(
+      await harness.client.getPrompt({
+        name: 'cache-audit',
+        arguments: { projectId: 'proj_x/../y' },
+      }),
+    );
+    expect(scoped).toContain('project "proj_x..y"');
+    expect(scoped).toContain('projectId="proj_x..y"');
+  });
+
+  it('renders debug-missing-secret with required and optional scoping', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const minimal = promptText(
+      await harness.client.getPrompt({
+        name: 'debug-missing-secret',
+        arguments: { name: 'NPM_TOKEN', repo: 'acme/api' },
+      }),
+    );
+    expect(minimal).toContain('depot_list_ci_secrets with query="NPM_TOKEN" and repo="acme/api".');
+    expect(minimal).toContain('depot_list_ci_variables');
+    expect(minimal).toContain('which variant, if any, would match');
+    expect(minimal).not.toContain('branch=');
+    expect(minimal).not.toContain('workflow=');
+
+    const full = promptText(
+      await harness.client.getPrompt({
+        name: 'debug-missing-secret',
+        arguments: {
+          name: 'NPM TOKEN$(x)',
+          repo: 'acme/api',
+          branch: 'release/2.4 ',
+          workflow: '.github/workflows/ci.yml',
+        },
+      }),
+    );
+    expect(full).toContain('query="NPMTOKENx"');
+    expect(full).toContain('branch="release/2.4"');
+    expect(full).toContain('workflow=".github/workflows/ci.yml"');
+    expect(full).not.toContain('$(');
+
+    await expect(
+      harness.client.getPrompt({
+        name: 'debug-missing-secret',
+        arguments: { name: '!!!', repo: 'a/b' },
+      }),
+    ).rejects.toThrow(/name and repo/);
+  });
+
+  it('renders watch-run polling depot_get_ci_run, then diagnosing or listing artifacts', async () => {
+    harness = await createHarness({ routes: {} });
+
+    const rendered = promptText(
+      await harness.client.getPrompt({ name: 'watch-run', arguments: { runId: 'run_7f3d9c21' } }),
+    );
+    expect(rendered).toContain('depot_get_ci_run with runId="run_7f3d9c21"');
+    expect(rendered).not.toContain('depot_wait_for_ci_run');
+    expect(rendered).toContain('depot_diagnose_ci_failure with id="run_7f3d9c21"');
+    expect(rendered).toContain('depot_list_ci_artifacts with runId="run_7f3d9c21"');
+    expect(rendered).toContain('cannot cancel or retry');
+
+    await expect(harness.client.getPrompt({ name: 'watch-run', arguments: {} })).rejects.toThrow(
+      /runId/,
+    );
   });
 
   it('renders diagnose-latest-failure with and without a repo', async () => {

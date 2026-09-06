@@ -6,7 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Five prompts, each with sanitised and quoted arguments and steps that name the exact tools: `triage-failures-today` (`repo?`, `hours?`), `compare-ci-runs` (`runA`, `runB`), `cache-audit` (`projectId?`), `debug-missing-secret` (`name`, `repo`, `branch?`, `workflow?`), and `watch-run` (`runId`). None of them instructs the agent to retry, rerun, cancel, or reset anything.
+- Four read-only resources, advertised through `resources/list` and `resources/templates/list`, with no subscriptions: `depot://ci/run/{runId}` (the run tree from `GetRunStatus`), `depot://ci/runs/failed` (the last 20 failed runs), `depot://project/{projectId}/builds` (the last 20 builds with cache ratios), and `depot://projects` (projects with cache policies). Each uses the same Depot call and parser as the matching tool, returns `text/plain`, stays within `DEPOT_MCP_OUTPUT_BUDGET`, and reports a Depot failure as a readable JSON-RPC error.
+
+### Changed
+
+- `depot_list_builds` shows the cache hit ratio as a percentage next to the cached step count (`11/14 cached (79%)`).
 
 ## [0.1.1] - 2026-09-06
 
