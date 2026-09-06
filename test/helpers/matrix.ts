@@ -36,6 +36,26 @@ export const TOOL_MATRIX: readonly ToolInvocation[] = [
     routes: { [RPC.getRun]: ok(fixture('run')), [RPC.getRunStatus]: ok(fixture('run-status')) },
   },
   {
+    name: 'depot_get_ci_job',
+    args: { jobId: 'job_4d0a77' },
+    routes: { [RPC.getJob]: ok(fixture('job')) },
+  },
+  {
+    name: 'depot_get_ci_attempt',
+    args: { attemptId: 'att_91bc02' },
+    routes: { [RPC.getAttempt]: ok(fixture('attempt')) },
+  },
+  {
+    name: 'depot_list_ci_workflows',
+    args: {},
+    routes: { [RPC.listWorkflows]: ok(fixture('workflows-list')) },
+  },
+  {
+    name: 'depot_get_ci_workflow',
+    args: { workflowId: 'wf_2b8e11' },
+    routes: { [RPC.getWorkflow]: ok(fixture('workflow')) },
+  },
+  {
     name: 'depot_get_ci_logs',
     args: { id: 'att_91bc02' },
     routes: { [RPC.getJobAttemptLogs]: [ok(fixture('logs-page1')), ok(fixture('logs-page2'))] },

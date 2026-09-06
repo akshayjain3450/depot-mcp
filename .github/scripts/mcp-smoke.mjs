@@ -11,7 +11,7 @@ import path from 'node:path';
 import process from 'node:process';
 import { createInterface } from 'node:readline';
 
-const EXPECTED_TOOL_COUNT = 16;
+const EXPECTED_TOOL_COUNT = 20;
 const EXPECTED_PROMPTS = ['diagnose-latest-failure', 'explain-build-slowness'];
 const PROTOCOL_VERSION = '2025-11-25';
 const TIMEOUT_MS = 20_000;

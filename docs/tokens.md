@@ -12,6 +12,7 @@ The short version: **use an Organization token.** It runs every tool. A user tok
 | `depot_diagnose_ci_failure` | yes | yes |
 | `depot_list_ci_runs` | yes | yes |
 | `depot_get_ci_run` | yes | yes |
+| `depot_get_ci_job`, `depot_get_ci_attempt`, `depot_list_ci_workflows`, `depot_get_ci_workflow` | yes | yes (same `depot.ci.v1` service as the tools above) |
 | `depot_get_ci_logs` | yes | yes |
 | `depot_get_ci_job_summary` | yes | yes |
 | `depot_get_ci_metrics` | yes | yes |

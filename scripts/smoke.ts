@@ -10,9 +10,22 @@ import { ConfigError, loadConfig } from '../src/config.js';
 import { DepotApi } from '../src/depot/api.js';
 import { DepotClient } from '../src/depot/client.js';
 import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
-import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
+import {
+  readNumber,
+  readObject,
+  readObjectArray,
+  readString,
+  type JsonObject,
+} from '../src/depot/shape.js';
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
-import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
+import {
+  parseAttemptDetail,
+  parseAttempts,
+  parseJobDetail,
+  parseWorkflowContext,
+} from '../src/lib/ci-detail.js';
+import { isFailureState, parseRunSummary, parseRunTree, selectInterestingJob } from '../src/lib/ci-tree.js';
+import { parseWorkflowListEntry } from '../src/lib/ci-workflow.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
 import { parseProject } from '../src/lib/project.js';
 import { daysAgoRfc3339 } from '../src/lib/time.js';
@@ -240,7 +253,64 @@ async function main(): Promise<void> {
       const lines = readObjectArray(response, 'lines');
       return { detail: `${lines.length} log line(s) on the first page of job ${jobId}` };
     });
+
+    // The failed run's tree gives one workflow, job and attempt id for the detail RPCs.
+    const selection = selectInterestingJob(parseRunTree(await api.getRunStatus(runId)));
+    const workflowId = selection?.workflow.workflowId;
+    const jobId = selection?.job.jobId;
+    const attemptId = selection?.attempt?.attemptId;
+
+    if (workflowId === undefined) {
+      record('GetWorkflow', 'skipped', 'no workflow id in the run tree');
+    } else {
+      await attempt('GetWorkflow', async () => {
+        const response = await api.getWorkflow(workflowId);
+        const workflow = parseWorkflowContext(response);
+        const executions = readObjectArray(response, 'executions');
+        const jobs = readObjectArray(response, 'jobs');
+        return {
+          detail: `workflow "${workflow.name ?? '?'}" ${workflow.status ?? '?'}, ${executions.length} execution(s), ${jobs.length} job(s)`,
+        };
+      });
+    }
+
+    if (jobId === undefined) {
+      record('GetJob', 'skipped', 'no job id in the run tree');
+    } else {
+      await attempt('GetJob', async () => {
+        const response = await api.getJob(jobId);
+        const job = parseJobDetail(response);
+        const attempts = parseAttempts(response);
+        return {
+          detail: `job "${job.jobDisplayName ?? job.jobKey ?? '?'}" ${job.status ?? '?'}/${job.conclusion ?? '?'}, ${attempts.length} attempt(s), current ${job.currentAttemptId ?? '?'}`,
+        };
+      });
+    }
+
+    if (attemptId === undefined) {
+      record('GetAttempt', 'skipped', 'no attempt id in the run tree');
+    } else {
+      await attempt('GetAttempt', async () => {
+        const response = await api.getAttempt(attemptId);
+        const detail = parseAttemptDetail(readObject(response, 'attempt') ?? {});
+        return {
+          detail: `attempt ${detail.attempt ?? '?'} ${detail.status ?? '?'}/${detail.conclusion ?? '?'}, sandbox ${detail.sandboxId ?? '?'}, current=${detail.isCurrent ?? '?'}`,
+        };
+      });
+    }
   }
+
+  await attempt('ListWorkflows', async () => {
+    const workflows = readObjectArray(await api.listWorkflows({ pageSize: 10 }), 'workflows').map(
+      parseWorkflowListEntry,
+    );
+    for (const workflow of workflows.slice(0, 5)) {
+      console.log(
+        `         - ${workflow.workflowId ?? '?'} ${workflow.name ?? '?'} ${workflow.status ?? '?'} ${workflow.runId ?? '?'} jobs=${JSON.stringify(workflow.jobCounts)}`,
+      );
+    }
+    return { detail: `${workflows.length} workflow(s) with no status filter` };
+  });
 
   console.log('');
   console.log('CI configuration (names and scoping only)');

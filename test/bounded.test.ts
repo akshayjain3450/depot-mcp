@@ -128,6 +128,75 @@ const GIANT_CASES: readonly GiantCase[] = [
     saysTruncated: TRUNCATED_FOOTER,
   },
   {
+    name: 'depot_get_ci_job',
+    args: { jobId: 'job_giant' },
+    routes: {
+      [RPC.getJob]: ok({
+        ...fixture('job'),
+        jobId: 'job_giant',
+        attempts: many(300, (i) => ({
+          attemptId: `att_${i}`,
+          attempt: i + 1,
+          status: 'failed',
+          conclusion: 'failure',
+          errorMessage: `attempt ${i} ${filler(i)}`,
+          sandboxId: `sbx_${i}`,
+          isCurrent: i === 299,
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_ci_attempt',
+    args: { attemptId: 'att_giant' },
+    routes: {
+      [RPC.getAttempt]: ok({
+        ...fixture('attempt'),
+        jobErrorMessage: 'e'.repeat(6_000),
+        attempt: { attemptId: 'att_giant', attempt: 1, status: 'failed', errorMessage: 'e'.repeat(6_000) },
+      }),
+    },
+    // The error message is capped at MAX_LOG_LINE_CHARS, which is still wider than this budget.
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_ci_workflows',
+    args: {},
+    routes: {
+      [RPC.listWorkflows]: ok({
+        workflows: many(500, (i) => ({
+          workflowId: `wf_${i}`,
+          name: `workflow ${i}`,
+          repo: 'acme/api',
+          status: 'failed',
+          runId: `run_${i}`,
+          createdAt: '2026-09-03T14:02:19Z',
+          jobCounts: { total: 4, failed: 1 },
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_ci_workflow',
+    args: { workflowId: 'wf_giant' },
+    routes: {
+      [RPC.getWorkflow]: ok({
+        ...fixture('workflow'),
+        workflowId: 'wf_giant',
+        executions: many(50, (i) => ({ executionId: `exec_${i}`, execution: i + 1, status: 'failed' })),
+        jobs: many(300, (j) => ({
+          jobId: `job_${j}`,
+          jobKey: `job number ${j}`,
+          status: 'failed',
+          attempts: [{ attemptId: `att_${j}`, attempt: 1, status: 'failed', sandboxId: `sbx_${j}` }],
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
     name: 'depot_get_ci_logs',
     args: { id: 'att_giant' },
     routes: {

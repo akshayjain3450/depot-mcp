@@ -34,14 +34,14 @@ Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
 
 ## 0.2: read additions
 
-Twelve always-on tools, ordered by value.
+Twelve always-on tools, ordered by value. The first four shipped on 2026-09-06 and are waiting for a release.
 
 | Tool | Depot RPCs | What it answers |
 | --- | --- | --- |
-| `depot_get_ci_job` | `GetJob` | One job with its dependency jobs and every attempt. The gap between the run tree and the logs. |
-| `depot_get_ci_attempt` | `GetAttempt` | One attempt's status, timing, and sandbox identifiers. |
-| `depot_list_ci_workflows` | `ListWorkflows` | Workflow runs filtered by name, repo, status, trigger, sha, or PR, with job counts. Defaults to every status, since Depot returns nothing without a status filter. |
-| `depot_get_ci_workflow` | `GetWorkflow` | Execution history including rerun and retry lineage. Prerequisite for the 0.3 rerun previews. |
+| `depot_get_ci_job` | `GetJob` | **Shipped, unreleased.** One job with every attempt, newest first. The gap between the run tree and the logs. Live, the response carries no dependency-job list despite the docs; the tool does not claim one. |
+| `depot_get_ci_attempt` | `GetAttempt` | **Shipped, unreleased.** One attempt's status, timing, and sandbox identifiers. |
+| `depot_list_ci_workflows` | `ListWorkflows` | **Shipped, unreleased.** Workflow runs filtered by name, repo, status, trigger, sha, or PR, with job counts. Unlike `ListRuns`, Depot answers without a status filter, so the tool sends one only when asked. |
+| `depot_get_ci_workflow` | `GetWorkflow` | **Shipped, unreleased.** Execution history including rerun and retry lineage. Prerequisite for the 0.3 rerun previews. |
 | `depot_wait_for_ci_run` | `GetRunStatus`, polled | Waits up to a bounded timeout for a run to finish, reporting which nodes changed. Polls the unary RPC only; never the streaming ones. |
 | `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` | A short-lived signed download URL for one artifact, never logged. |
 | `depot_list_project_usage` | `ListProjectUsage` | Every project's build count, build seconds, and layer cache size in one call. Organization token only. |

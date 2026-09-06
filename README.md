@@ -78,7 +78,7 @@ Depot has three kinds of token and they are not interchangeable. Verified live o
 | Tool group | Organization token | User token |
 | --- | --- | --- |
 | `depot_whoami` | yes | yes |
-| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
+| Depot CI: `depot_diagnose_ci_failure`, `depot_list_ci_runs`, `depot_get_ci_run`, `depot_get_ci_job`, `depot_get_ci_attempt`, `depot_list_ci_workflows`, `depot_get_ci_workflow`, `depot_get_ci_logs`, `depot_get_ci_job_summary`, `depot_get_ci_metrics`, `depot_list_ci_artifacts` | yes | yes |
 | `depot_list_ci_secrets`, `depot_list_ci_variables` | yes | admins and owners only |
 | `depot_list_images` | yes | yes |
 | `depot_list_projects`, `depot_get_project`, `depot_list_builds`, `depot_diagnose_build`, `depot_get_usage` | yes | **no**: Depot answers `401 Invalid token`, whatever the user's role |
@@ -407,7 +407,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
+All 20 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Names are stable: a rename or removal is a breaking change and will be listed in [CHANGELOG.md](./CHANGELOG.md).
 
 ### Diagnosis (start here)
 
@@ -423,6 +423,10 @@ All 16 tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `
 | --- | --- |
 | `depot_list_ci_runs` | Which runs happened recently, and which failed? Filter by status, repo, SHA, trigger, PR. |
 | `depot_get_ci_run` | What is this run's workflow, job, and attempt tree, and which node broke? |
+| `depot_get_ci_job` | What happened to this job across its retries? Status, conclusion, recorded error, runner labels, timing, and every attempt with its sandbox id, newest first. |
+| `depot_get_ci_attempt` | One attempt's own record: status, conclusion, error, sandbox and session ids, timing, whether it is current. |
+| `depot_list_ci_workflows` | Which workflows ran recently, and which failed? Filter by name, status, repo, SHA, trigger, PR; job counts per workflow. |
+| `depot_get_ci_workflow` | One workflow's execution history (reruns and retries) and its job -> attempt tree. |
 | `depot_get_ci_logs` | Bounded raw logs for an attempt: tail by default, `grep`/step/stream filters, forward paging with an exact cursor. Filters run in this server after fetching, so `grep` still reads up to `DEPOT_MCP_MAX_LOG_PAGES` pages. When the page cap stops the walk the result says the log continues, and `pageCapHit` plus `nextPageToken` let you carry on; it never labels the middle of a log as its tail. Line bodies are capped at 2000 characters (`bodyTruncated`). |
 | `depot_get_ci_job_summary` | What did the job publish about itself (the `$GITHUB_STEP_SUMMARY` equivalent)? |
 | `depot_get_ci_metrics` | Was this an OOM kill or CPU starvation? CPU/memory for a run, job, or attempt. |

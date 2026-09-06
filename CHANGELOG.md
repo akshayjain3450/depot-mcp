@@ -6,7 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Four read-only Depot CI tools, bringing the total to 20:
+  - `depot_get_ci_job` (`GetJob`): one job's status, conclusion, recorded error, runner labels, timing, and every attempt newest first with attempt and sandbox ids.
+  - `depot_get_ci_attempt` (`GetAttempt`): one attempt's own record with its job, workflow, and run for context.
+  - `depot_list_ci_workflows` (`ListWorkflows`): workflows newest first with job counts, filtered by name, status, repo, SHA, trigger, or PR. Unlike `ListRuns`, Depot answers this without a status filter, so none is sent unless given.
+  - `depot_get_ci_workflow` (`GetWorkflow`): one workflow's execution history (rerun and retry lineage) and its job -> attempt tree.
+  - Job and attempt error messages are CI output: capped at 2000 characters, quoted in the summary, and covered by the untrusted-content warning.
+  - All four verified live on 2026-09-06 against a failed run in a trial organization.
 
 ## [0.1.1] - 2026-09-06
 

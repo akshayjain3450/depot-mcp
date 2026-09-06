@@ -32,6 +32,17 @@ export interface ListRunsRequest {
   pageToken?: string | undefined;
 }
 
+export interface ListWorkflowsRequest {
+  name?: string | undefined;
+  repo?: string | undefined;
+  status?: string[] | undefined;
+  trigger?: string | undefined;
+  sha?: string | undefined;
+  pr?: number | undefined;
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+}
+
 export interface LogsRequest {
   attemptId?: string | undefined;
   jobId?: string | undefined;
@@ -175,6 +186,22 @@ export class DepotApi {
 
   getRunStatus(runId: string): Promise<JsonObject> {
     return this.client.call(rpc(CI, 'GetRunStatus'), { runId });
+  }
+
+  listWorkflows(request: ListWorkflowsRequest): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'ListWorkflows'), { ...request });
+  }
+
+  getWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetWorkflow'), { workflowId });
+  }
+
+  getJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetJob'), { jobId });
+  }
+
+  getAttempt(attemptId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetAttempt'), { attemptId });
   }
 
   getRunMetrics(runId: string): Promise<JsonObject> {

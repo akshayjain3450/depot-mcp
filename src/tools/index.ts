@@ -3,10 +3,12 @@ import type { ToolContext, ToolModule } from '../lib/tool.js';
 import { listCiArtifactsTool } from './ci-artifacts.js';
 import { listCiSecretsTool, listCiVariablesTool } from './ci-config.js';
 import { diagnoseCiFailureTool } from './ci-diagnose.js';
+import { getCiAttemptTool, getCiJobTool } from './ci-jobs.js';
 import { getCiLogsTool } from './ci-logs.js';
 import { getCiMetricsTool } from './ci-metrics.js';
 import { getCiRunTool, listCiRunsTool } from './ci-runs.js';
 import { getCiJobSummaryTool } from './ci-summary.js';
+import { getCiWorkflowTool, listCiWorkflowsTool } from './ci-workflows.js';
 import { diagnoseBuildTool, listBuildsTool } from './builds.js';
 import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
@@ -18,6 +20,10 @@ export const readOnlyTools: readonly ToolModule[] = [
   diagnoseCiFailureTool,
   listCiRunsTool,
   getCiRunTool,
+  getCiJobTool,
+  getCiAttemptTool,
+  listCiWorkflowsTool,
+  getCiWorkflowTool,
   getCiLogsTool,
   getCiJobSummaryTool,
   getCiMetricsTool,
