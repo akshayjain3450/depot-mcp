@@ -67,7 +67,7 @@ Maintainers only.
 
 1. Update `version` in `package.json`, `server.json` (both the top-level `version` and the npm package entry), and `manifest.json`. `node .github/scripts/check-metadata.mjs` confirms they agree.
 2. Move the `Unreleased` section of `CHANGELOG.md` to the new version with today's date.
-3. Commit, tag `vX.Y.Z`, push the tag. `.github/workflows/release.yml` runs the full check suite and publishes to npm with provenance using the `NPM_TOKEN` secret.
+3. Commit, tag `vX.Y.Z`, push the tag. `.github/workflows/release.yml` runs the full check suite and publishes to npm with provenance. Authentication is npm trusted publishing: npm trusts this repository's `release.yml` workflow running in the `npm` GitHub environment via OIDC, so no npm token is stored anywhere. If a release fails with an npm authentication error, check the Trusted Publisher settings on the npm package page (owner `akshayjain3450`, repository `depot-mcp`, workflow `release.yml`, environment `npm`).
 4. Publish the MCP Registry entry: `mcp-publisher login github && mcp-publisher publish` from the repository root. The registry verifies ownership through the `mcpName` field in `package.json`.
 5. Optional Claude Desktop bundle: stage a directory containing `manifest.json`, `package.json`, `dist/`, and production `node_modules/` (`npm ci --omit=dev` in the staging copy), then run `npx @anthropic-ai/mcpb pack <staging-dir> depot-mcp.mcpb` and attach the file to the GitHub release. Record its SHA-256 if you add an `mcpb` package entry to `server.json`.
 
