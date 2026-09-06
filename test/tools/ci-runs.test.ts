@@ -14,6 +14,20 @@ function records(value: unknown): Array<Record<string, unknown>> {
 }
 
 describe('depot_list_ci_runs', () => {
+  it('sends every status when the caller gives no filter, because Depot returns nothing otherwise', async () => {
+    harness = await createHarness({ routes: { [RPC.listRuns]: ok(fixture('list-runs')) } });
+
+    await callTool(harness, 'depot_list_ci_runs', {});
+
+    expect(harness.callsTo(RPC.listRuns)[0]?.body.status).toEqual([
+      'queued',
+      'running',
+      'finished',
+      'failed',
+      'cancelled',
+    ]);
+  });
+
   it('normalises statuses and surfaces the ids needed to drill in', async () => {
     harness = await createHarness({ routes: { [RPC.listRuns]: ok(fixture('list-runs')) } });
 

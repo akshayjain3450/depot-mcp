@@ -28,6 +28,8 @@ const runSummarySchema = z.object({
   durationSeconds: z.number().optional(),
 });
 
+const ALL_RUN_STATUSES = ['queued', 'running', 'finished', 'failed', 'cancelled'] as const;
+
 export const listCiRunsTool = defineTool({
   name: 'depot_list_ci_runs',
   title: 'List Depot CI runs',
@@ -85,7 +87,9 @@ Returns identity, status and timing only. It does not return logs or failure det
     }
 
     const response = await context.api.listRuns({
-      status: input.status === undefined ? undefined : [...input.status],
+      // Verified live 2026-09-06: ListRuns answers an empty list unless a status filter is
+      // present, so "no filter" is sent as every status.
+      status: input.status === undefined ? [...ALL_RUN_STATUSES] : [...input.status],
       repo: input.repo,
       sha: input.sha,
       trigger: input.trigger,
