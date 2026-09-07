@@ -385,16 +385,29 @@ async function discover(session: Session, stamp: string): Promise<DiscoveryResul
   d.activeOrgId = readString(whoami, 'activeOrgId');
 
   const projects = await probe('depot_list_projects', { limit: 50 });
-  d.projectId =
-    readObjectArray(projects, 'projects').map((project) => readString(project, 'projectId'))[0] ??
-    readObjectArray(whoami, 'projects').map((project) => readString(project, 'projectId'))[0] ??
-    session.config.projectId;
-
-  if (d.projectId !== undefined) {
-    const builds = readObjectArray(
-      await probe('depot_list_builds', { projectId: d.projectId, limit: 50 }),
+  const candidates = [
+    ...readObjectArray(projects, 'projects').map((project) => readString(project, 'projectId')),
+    ...readObjectArray(whoami, 'projects').map((project) => readString(project, 'projectId')),
+    session.config.projectId,
+  ].filter((id): id is string => id !== undefined);
+  // Prefer a project that has builds, so the build tools are exercised even when an empty
+  // project happens to sort first (seen live when a throwaway verify project was left behind).
+  let builds: JsonObject[] = [];
+  for (const candidate of [...new Set(candidates)].slice(0, 5)) {
+    const listed = readObjectArray(
+      await probe('depot_list_builds', { projectId: candidate, limit: 50 }),
       'builds',
     );
+    if (d.projectId === undefined || listed.length > 0) {
+      d.projectId = candidate;
+      builds = listed;
+    }
+    if (listed.length > 0) {
+      break;
+    }
+  }
+
+  if (d.projectId !== undefined) {
     d.failedBuildId = builds.find((build) => isFailureWord(readString(build, 'status')))
       ? readString(builds.find((build) => isFailureWord(readString(build, 'status'))), 'buildId')
       : undefined;

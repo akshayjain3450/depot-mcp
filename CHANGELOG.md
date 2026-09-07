@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- Server instructions and the build tool description tell the model not to route around a missing capability: when this server cannot start a build or a write's flag is off, say so and stop, rather than running the `depot` CLI, reading credentials out of client configuration, or using another tool. Found by the first Claude Code session test (`docs/verification.md`).
+- `depot_list_project_usage` labels projects whose name is not visible (deleted, or outside the token) instead of printing a bare id.
+- README troubleshooting covers `depot-mcp: command not found` when Claude Code is started inside the repository itself.
+- The verification script's discovery prefers a project that has builds, so the build tools are exercised even when an empty project sorts first.
 
 ## [0.2.0] - 2026-09-07
 

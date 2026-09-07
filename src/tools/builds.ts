@@ -192,7 +192,7 @@ Pass projectId when you know it. Depot's build record does not include a project
 
 Also reports cachedSteps vs totalSteps and secondsSaved, which is the fastest way to see whether a slow build is a cache miss problem rather than a code problem.
 
-Read-only: this cannot start, retry, or cancel a build. Container builds cannot be triggered through Depot's API at all — a human runs "depot build" locally, or CI runs it.`,
+Read-only: this cannot start, retry, or cancel a build. Container builds cannot be triggered through Depot's API at all. If asked to start one, say that the user runs "depot build" locally or CI runs it; do not run the CLI on the user's behalf or look for a token to do so.`,
   inputSchema: {
     buildId: z.string().min(1).describe('The build id, as shown by depot_list_builds or the Depot dashboard.'),
     projectId: z

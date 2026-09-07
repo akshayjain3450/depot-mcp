@@ -600,6 +600,7 @@ One process, one credential, no listening port, no protobuf toolchain. Depot's C
 
 | Symptom | Cause and fix |
 | --- | --- |
+| `claude mcp list` shows `Failed to connect` and the log says `sh: depot-mcp: command not found` | You started Claude Code inside the depot-mcp repository itself: `npx` sees a project of the same name and skips the install. Start `claude` from any other directory, or point the registration at `node <clone>/dist/index.js`. |
 | Server exits immediately with code 78 | `DEPOT_TOKEN` is unset or empty. The client's `env` block is the usual place it went missing. |
 | A project, build, or usage tool says `unauthenticated` while CI tools work | You have a user token. Those services accept only Organization tokens; see [Which token can do what](#which-token-can-do-what). |
 | Every list is empty but the token is valid | Multi-organization token without `DEPOT_ORG_ID`. Call `depot_whoami`; it names the organizations it can see. |
