@@ -1,0 +1,89 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_7f3d9c21",
+  "repo": "acme/api",
+  "ref": "refs/heads/main",
+  "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+  "headSha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+  "trigger": "push",
+  "runStatus": "finished",
+  "runCreatedAt": "2026-09-03T14:02:11Z",
+  "runStartedAt": "2026-09-03T14:02:19Z",
+  "runFinishedAt": "2026-09-04T14:00:22Z",
+  "workflowId": "wf_2b8e11",
+  "workflowName": "CI",
+  "workflowStatus": "finished",
+  "workflowCreatedAt": "2026-09-03T14:02:12Z",
+  "workflowStartedAt": "2026-09-03T14:02:13Z",
+  "workflowFinishedAt": "2026-09-04T14:00:20Z",
+  "executions": [
+    {
+      "executionId": "exec_1a7c3e",
+      "execution": 1,
+      "status": "failed",
+      "createdAt": "2026-09-03T14:02:12Z",
+      "startedAt": "2026-09-03T14:02:13Z",
+      "finishedAt": "2026-09-03T14:09:45Z"
+    },
+    {
+      "executionId": "exec_2b8d4f",
+      "execution": 2,
+      "status": "finished",
+      "createdAt": "2026-09-04T13:58:00Z",
+      "startedAt": "2026-09-04T13:58:05Z",
+      "finishedAt": "2026-09-04T14:00:20Z"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "job_1c9f30",
+      "jobKey": "lint",
+      "status": "finished",
+      "startedAt": "2026-09-04T13:58:10Z",
+      "finishedAt": "2026-09-04T13:59:05Z",
+      "attempts": [
+        {
+          "attemptId": "att_11aa01",
+          "attempt": 1,
+          "status": "finished",
+          "sandboxId": "sbx_9e1f2a3b4c",
+          "startedAt": "2026-09-03T14:02:20Z",
+          "finishedAt": "2026-09-03T14:03:22Z"
+        },
+        {
+          "attemptId": "att_22bb02",
+          "attempt": 2,
+          "status": "finished",
+          "sandboxId": "sbx_7d4c1e9a0b",
+          "startedAt": "2026-09-04T13:58:10Z",
+          "finishedAt": "2026-09-04T13:59:05Z"
+        }
+      ]
+    },
+    {
+      "jobId": "job_4d0a77",
+      "jobKey": "test (18)",
+      "status": "finished",
+      "startedAt": "2026-09-04T13:58:10Z",
+      "finishedAt": "2026-09-04T14:00:18Z",
+      "attempts": [
+        {
+          "attemptId": "att_80ab00",
+          "attempt": 1,
+          "status": "failed",
+          "sandboxId": "sbx_0a3e7c11d2",
+          "startedAt": "2026-09-03T14:02:20Z",
+          "finishedAt": "2026-09-03T14:09:40Z"
+        },
+        {
+          "attemptId": "att_93cd03",
+          "attempt": 2,
+          "status": "finished",
+          "sandboxId": "sbx_5e8f2a6c1d",
+          "startedAt": "2026-09-04T13:58:10Z",
+          "finishedAt": "2026-09-04T14:00:18Z"
+        }
+      ]
+    }
+  ]
+}

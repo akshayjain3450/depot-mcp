@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { callTool, connectError, createHarness, fixture, ok, type Harness } from '../helpers/harness.js';
+import {
+  callTool,
+  connectError,
+  createHarness,
+  fixture,
+  ok,
+  type Harness,
+} from '../helpers/harness.js';
 import { RPC } from '../helpers/rpcs.js';
 
 let harness: Harness | undefined;
@@ -177,21 +184,67 @@ describe('depot_whoami', () => {
     const result = await callTool(harness, 'depot_whoami', {});
 
     expect(result.structured.writesEnabled).toBe(true);
-    expect(result.structured.mutatingToolsAvailable).toBe(8);
+    expect(result.structured.destructiveEnabled).toBe(false);
+    expect(result.structured.mutatingToolsAvailable).toBe(10);
     expect(result.structured.mutatingTools).toEqual([
       'depot_cancel_ci_run',
       'depot_cancel_ci_job',
       'depot_retry_ci_failed_jobs',
       'depot_retry_ci_job',
       'depot_rerun_ci_workflow',
+      'depot_dispatch_ci_workflow',
       'depot_set_ci_variable',
       'depot_delete_ci_variable',
       'depot_create_project',
+      'depot_update_project',
     ]);
+    expect(result.structured.destructiveTools).toEqual([]);
     expect(result.text).toContain('Writes: ENABLED');
-    expect(result.text).toContain('8 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.text).toContain('10 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.structured.mutatingTools).not.toContain('depot_stop_sandbox');
     expect(result.text).toContain('dryRun:true');
+    expect(result.text).toContain(
+      'Destructive writes: disabled. DEPOT_MCP_ALLOW_DESTRUCTIVE is not set, so depot_delete_project is not registered',
+    );
     expect(JSON.stringify(result.structured.warnings)).not.toContain('no effect');
+  });
+
+  it('reports the destructive gate as open, and names its tools, only when both flags are set', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { allowWrites: true, allowDestructive: true },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.destructiveEnabled).toBe(true);
+    expect(result.structured.mutatingToolsAvailable).toBe(11);
+    expect(result.structured.mutatingTools).toContain('depot_delete_project');
+    expect(result.structured.destructiveTools).toEqual(['depot_delete_project']);
+    expect(result.text).toContain('Destructive writes: ENABLED by DEPOT_MCP_ALLOW_DESTRUCTIVE. depot_delete_project');
+    expect(result.text).toContain('confirmation argument');
+  });
+
+  it('warns that DEPOT_MCP_ALLOW_DESTRUCTIVE alone does nothing', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { allowDestructive: true },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.writesEnabled).toBe(false);
+    expect(result.structured.destructiveEnabled).toBe(false);
+    expect(result.structured.mutatingTools).toEqual([]);
+    expect(result.structured.destructiveTools).toEqual([]);
+    expect(result.text).toContain('Destructive writes: disabled. DEPOT_MCP_ALLOW_DESTRUCTIVE only counts once DEPOT_MCP_ALLOW_WRITES is set');
+    expect(JSON.stringify(result.structured.warnings)).toContain('has no effect');
   });
 
   it('reports writes as disabled, with no mutating tools, when the gate is off', async () => {
@@ -207,7 +260,9 @@ describe('depot_whoami', () => {
     expect(result.structured.writesEnabled).toBe(false);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
     expect(result.structured.mutatingTools).toEqual([]);
+    expect(result.structured.destructiveEnabled).toBe(false);
     expect(result.text).toContain('Writes: disabled');
+    expect(result.text).toContain('Destructive writes: disabled');
     expect(result.text).not.toContain('depot_cancel_ci_run');
   });
 

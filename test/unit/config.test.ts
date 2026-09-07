@@ -36,10 +36,35 @@ describe('loadConfig', () => {
       orgId: undefined,
       projectId: undefined,
       allowWrites: false,
+      allowDestructive: false,
       enableBeta: false,
+      dispatchAllowlist: undefined,
       maxLogPages: DEFAULT_MAX_LOG_PAGES,
       outputCharBudget: DEFAULT_OUTPUT_CHAR_BUDGET,
     });
+  });
+
+  it('parses the destructive gate like the write gate, and keeps the two independent', () => {
+    expect(loadConfig({ DEPOT_TOKEN: 't' }).allowDestructive).toBe(false);
+    for (const value of ['1', 'true', 'TRUE', 'yes', 'on', ' on ']) {
+      expect(
+        loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: value }).allowDestructive,
+        value,
+      ).toBe(true);
+    }
+    for (const value of ['0', 'false', 'no', 'off', '', 'delete']) {
+      expect(
+        loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: value }).allowDestructive,
+        value,
+      ).toBe(false);
+    }
+    // The value is recorded as given; registration (not parsing) is where it needs allowWrites too.
+    const alone = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: '1' });
+    expect(alone.allowWrites).toBe(false);
+    expect(alone.allowDestructive).toBe(true);
+    const writesOnly = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_WRITES: '1' });
+    expect(writesOnly.allowWrites).toBe(true);
+    expect(writesOnly.allowDestructive).toBe(false);
   });
 
   it('trims surrounding whitespace from values', () => {
@@ -74,6 +99,56 @@ describe('loadConfig', () => {
     const config = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ENABLE_BETA: '1' });
     expect(config.allowWrites).toBe(false);
     expect(config.enableBeta).toBe(true);
+  });
+
+  describe('DEPOT_MCP_DISPATCH_ALLOWLIST', () => {
+    it('is undefined when unset or blank, so any repository may be dispatched', () => {
+      expect(loadConfig({ DEPOT_TOKEN: 't' }).dispatchAllowlist).toBeUndefined();
+      expect(loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_DISPATCH_ALLOWLIST: '  ' }).dispatchAllowlist).toBeUndefined();
+      expect(loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_DISPATCH_ALLOWLIST: ' , ,' }).dispatchAllowlist).toBeUndefined();
+    });
+
+    it('parses comma-separated owner/name:workflow entries, lower-casing the repository', () => {
+      const config = loadConfig({
+        DEPOT_TOKEN: 't',
+        DEPOT_MCP_DISPATCH_ALLOWLIST: ' Acme/API:deploy.yml, acme/web:ci.yaml ,,acme/ops:Nightly.yml',
+      });
+
+      expect(config.dispatchAllowlist).toEqual([
+        { repo: 'acme/api', workflow: 'deploy.yml' },
+        { repo: 'acme/web', workflow: 'ci.yaml' },
+        { repo: 'acme/ops', workflow: 'Nightly.yml' },
+      ]);
+    });
+
+    it.each([
+      'acme/api',
+      'acme:deploy.yml',
+      'acme/api:.github/workflows/deploy.yml',
+      'acme/api:deploy.yml:extra',
+      'acme/api/extra:ci.yml',
+      'acme/api:ci yml',
+    ])('rejects %s with a message naming the variable and the expected shape', (value) => {
+      let message = '';
+      try {
+        loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_DISPATCH_ALLOWLIST: `acme/ok:ci.yml,${value}` });
+        expect.unreachable('expected loadConfig to throw');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConfigError);
+        message = error instanceof Error ? error.message : String(error);
+      }
+      expect(message).toMatch(/^DEPOT_MCP_DISPATCH_ALLOWLIST entries must look like owner\/name:workflow\.yml/);
+    });
+
+    it('does not echo a long or odd-looking entry, in case it is a pasted secret', () => {
+      const long = `acme/api:${'x'.repeat(60)}/y`;
+      expect(() => loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_DISPATCH_ALLOWLIST: long })).toThrow(
+        /got a value that is not one/,
+      );
+      expect(() => loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_DISPATCH_ALLOWLIST: long })).not.toThrow(
+        new RegExp('x'.repeat(60)),
+      );
+    });
   });
 
   it('rejects a token with a line break or space without echoing it', () => {

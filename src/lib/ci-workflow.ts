@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { readEnum, readNumber, readObject, readString, type JsonObject } from '../depot/shape.js';
-import { parseAttempts, parseJobDetail } from './ci-detail.js';
+import { parseAttempts, parseJobDetail, type WorkflowContext } from './ci-detail.js';
 import { STATUS_PREFIXES } from './ci-tree.js';
 import { durationSecondsBetween } from './time.js';
 
@@ -9,6 +9,8 @@ import { durationSecondsBetween } from './time.js';
 export const workflowListEntrySchema = z.object({
   workflowId: z.string().optional(),
   name: z.string().optional(),
+  /** The workflow file basename, for example `ci.yml`; Depot reports it on push-triggered rows. */
+  workflowPath: z.string().optional(),
   repo: z.string().optional(),
   status: z.string().optional(),
   trigger: z.string().optional(),
@@ -36,6 +38,7 @@ export function parseWorkflowListEntry(source: JsonObject): WorkflowListEntry {
   return {
     workflowId: readString(source, 'workflowId', 'id'),
     name: readString(source, 'name', 'workflowName'),
+    workflowPath: readString(source, 'workflowPath', 'path', 'workflowFile'),
     repo: readString(source, 'repo', 'repository'),
     status: readEnum(source, ['status', 'workflowStatus'], STATUS_PREFIXES),
     trigger: readEnum(source, ['trigger'], ['trigger']),
@@ -95,6 +98,58 @@ export function parseExecution(source: JsonObject): Execution {
     finishedAt,
     durationSeconds: durationSecondsBetween(startedAt, finishedAt),
   };
+}
+
+/**
+ * The execution Depot ran most recently: the highest execution number, or the last one listed
+ * when numbers are missing or tied. Depot lists executions oldest first.
+ */
+export function latestExecution<T extends { execution?: number | undefined }>(
+  executions: readonly T[],
+): T | undefined {
+  let latest: T | undefined;
+  for (const execution of executions) {
+    if (latest === undefined || (execution.execution ?? 0) >= (latest.execution ?? 0)) {
+      latest = execution;
+    }
+  }
+  return latest;
+}
+
+/**
+ * A workflow's timing as Depot reports it at the top level is its first execution's: after a
+ * rerun the workflow-level `startedAt` still names the original start while `finishedAt` moves
+ * to the latest finish, so their difference (seen live 2026-09-07: 23h58m for a workflow whose
+ * rerun took under a minute) is not the time anything ran. When executions are present the
+ * latest one carries the timing that is true now; without them the top-level fields are all
+ * there is.
+ */
+export function currentWorkflowTiming(
+  workflow: WorkflowContext,
+  executions: readonly Execution[],
+): Pick<WorkflowContext, 'startedAt' | 'finishedAt' | 'durationSeconds'> {
+  const latest = latestExecution(executions);
+  if (latest === undefined) {
+    return {
+      startedAt: workflow.startedAt,
+      finishedAt: workflow.finishedAt,
+      durationSeconds: workflow.durationSeconds,
+    };
+  }
+  return {
+    startedAt: latest.startedAt,
+    finishedAt: latest.finishedAt,
+    durationSeconds: latest.durationSeconds,
+  };
+}
+
+/** "execution 2 of 2", for the summary line; undefined when Depot listed no executions. */
+export function describeExecutionPosition(executions: readonly Execution[]): string | undefined {
+  const latest = latestExecution(executions);
+  if (latest === undefined) {
+    return undefined;
+  }
+  return `execution ${latest.execution ?? executions.length} of ${executions.length}`;
 }
 
 export function parseWorkflowJob(source: JsonObject): WorkflowJob {

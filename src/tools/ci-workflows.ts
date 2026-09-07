@@ -14,7 +14,10 @@ import {
   type WorkflowContext,
 } from '../lib/ci-detail.js';
 import {
+  currentWorkflowTiming,
+  describeExecutionPosition,
   executionSchema,
+  latestExecution,
   parseExecution,
   parseWorkflowJob,
   parseWorkflowListEntry,
@@ -163,11 +166,19 @@ function describeExecution(execution: Execution): string {
   return `#${execution.execution ?? '?'} ${bits.join(', ')}`;
 }
 
-function workflowHeadline(workflow: WorkflowContext, fallbackId: string, jobs: WorkflowJob[]): string {
+function workflowHeadline(
+  workflow: WorkflowContext,
+  fallbackId: string,
+  executions: Execution[],
+  jobs: WorkflowJob[],
+): string {
   const failed = jobs.filter(isFailed).length;
+  const position = describeExecutionPosition(executions);
+  const duration =
+    workflow.durationSeconds === undefined ? undefined : formatDuration(workflow.durationSeconds);
   const bits = [
     workflow.status ?? 'unknown status',
-    workflow.durationSeconds === undefined ? undefined : formatDuration(workflow.durationSeconds),
+    position === undefined ? duration : `${duration ?? 'unknown duration'} (${position})`,
     `${jobs.length} job(s)`,
     `${failed} failed`,
   ].filter((bit): bit is string => bit !== undefined);
@@ -192,11 +203,16 @@ It does not explain failures or return logs. For root cause, call depot_diagnose
   },
   outputSchema: {
     run: runContextSchema,
-    workflow: workflowContextSchema,
+    workflow: workflowContextSchema.describe(
+      'The workflow as it stands now. startedAt, finishedAt and durationSeconds are those of the latest execution when Depot lists executions; the top-level timing Depot returns spans from the first start to the last finish and is not the time anything ran.',
+    ),
     executions: z
       .array(executionSchema)
       .describe('Rerun and retry lineage in the order Depot reports it, oldest first.'),
     executionCount: z.number(),
+    latestExecution: executionSchema
+      .optional()
+      .describe('The execution with the highest number: the one whose timing the summary reports.'),
     jobs: z.array(workflowJobSchema),
     jobCount: z.number(),
     failedJobCount: z.number(),
@@ -205,13 +221,14 @@ It does not explain failures or return logs. For root cause, call depot_diagnose
     const workflowId = input.workflowId.trim();
     const response = await context.api.getWorkflow(workflowId);
     const run = parseRunContext(response);
-    const workflow = parseWorkflowContext(response);
     const executions = readObjectArray(response, 'executions').map(parseExecution);
+    const reported = parseWorkflowContext(response);
+    const workflow: WorkflowContext = { ...reported, ...currentWorkflowTiming(reported, executions) };
     const jobs = readObjectArray(response, 'jobs').map(parseWorkflowJob);
     const failedJobCount = jobs.filter(isFailed).length;
 
     const text = new TextBudget(context.config.outputCharBudget);
-    text.push(workflowHeadline(workflow, workflowId, jobs), `${describeRun(run)}.`);
+    text.push(workflowHeadline(workflow, workflowId, executions, jobs), `${describeRun(run)}.`);
 
     if (executions.length > 0) {
       const label = executions.length === 1 ? 'Executions' : `Executions (${executions.length}, oldest first)`;
@@ -249,6 +266,7 @@ It does not explain failures or return logs. For root cause, call depot_diagnose
         workflow,
         executions,
         executionCount: executions.length,
+        latestExecution: latestExecution(executions),
         jobs,
         jobCount: jobs.length,
         failedJobCount,

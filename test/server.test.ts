@@ -3,7 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
-import { betaTools, mutatingTools, readOnlyTools } from '../src/tools/index.js';
+import {
+  betaMutatingTools,
+  betaTools,
+  mutatingTools,
+  readOnlyTools,
+  destructiveTools,
+} from '../src/tools/index.js';
 import { createHarness, type Harness } from './helpers/harness.js';
 
 const PACKAGE_JSON = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
@@ -26,6 +32,8 @@ const MUTATING_WORDS = [
   'update',
   'share',
   'set',
+  'stop',
+  'kill',
 ];
 
 describe('server registration', () => {
@@ -37,9 +45,9 @@ describe('server registration', () => {
       [...readOnlyTools.map((tool) => tool.name)].sort(),
     );
     expect(tools).toHaveLength(28);
-    expect(mutatingTools).toHaveLength(8);
-    expect(tools).toHaveLength(28);
-    expect(mutatingTools).toHaveLength(8);
+    expect(mutatingTools).toHaveLength(10);
+    expect(betaMutatingTools).toHaveLength(2);
+    expect(destructiveTools).toHaveLength(1);
   });
 
   it('marks every tool read-only and non-destructive', async () => {
@@ -94,7 +102,7 @@ describe('server registration', () => {
     const { tools } = await harness.client.listTools();
 
     for (const tool of tools) {
-      expect(tool.description ?? '', tool.name).not.toHaveLength(23);
+      expect(tool.description ?? '', tool.name).not.toHaveLength(0);
       expect((tool.description ?? '').length, tool.name).toBeGreaterThan(200);
       expect(tool.outputSchema, tool.name).toBeDefined();
       expect(tool.inputSchema, tool.name).toBeDefined();
@@ -113,11 +121,29 @@ describe('server registration', () => {
   });
 
   it('names every mutating tool with a verb the read-only check would reject, so a write can never pass as a read', () => {
-    for (const tool of mutatingTools) {
+    for (const tool of [...mutatingTools, ...betaMutatingTools, ...destructiveTools]) {
       const verb = tool.name.replace(/^depot_/, '').split('_')[0] ?? '';
       expect(MUTATING_WORDS, tool.name).toContain(verb);
       expect(tool.annotations.readOnlyHint, tool.name).toBe(false);
     }
+  });
+
+  it('registers the beta sandbox writes only when both gates are open', async () => {
+    for (const config of [{ allowWrites: true }, { enableBeta: true }, {}]) {
+      harness = await createHarness({ routes: {}, config });
+      const { tools } = await harness.client.listTools();
+      const names = tools.map((tool) => tool.name);
+      for (const tool of betaMutatingTools) {
+        expect(names, `${tool.name} with ${JSON.stringify(config)}`).not.toContain(tool.name);
+      }
+      await harness.close();
+    }
+
+    harness = await createHarness({ routes: {}, config: { allowWrites: true, enableBeta: true } });
+    const { tools } = await harness.client.listTools();
+    expect(tools.map((tool) => tool.name)).toEqual(
+      [...readOnlyTools, ...betaTools, ...mutatingTools, ...betaMutatingTools].map((tool) => tool.name),
+    );
   });
 
   it('registers no beta tool unless DEPOT_MCP_ENABLE_BETA is set', async () => {

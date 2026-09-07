@@ -8,7 +8,12 @@ import { DepotClient } from '../../src/depot/client.js';
 import { DepotApiError } from '../../src/depot/errors.js';
 import { asObject } from '../../src/depot/shape.js';
 import type { ToolContext } from '../../src/lib/tool.js';
-import { defineWriteTool, DRY_RUN_DESCRIPTION, writeAuditLine } from '../../src/lib/write.js';
+import {
+  defaultAuditIds,
+  defineWriteTool,
+  DRY_RUN_DESCRIPTION,
+  writeAuditLine,
+} from '../../src/lib/write.js';
 import { stubFetch, testConfig, type RecordedCall } from '../helpers/harness.js';
 
 /**
@@ -16,7 +21,7 @@ import { stubFetch, testConfig, type RecordedCall } from '../helpers/harness.js'
  * to, and `apply` calls a spy standing in for the mutating RPC. Every branch of the helper is
  * observable without any Depot shape getting in the way.
  */
-function makeFixture() {
+function makeFixture(options: { auditIds?: boolean } = {}) {
   const rpc = vi.fn<(id: string) => Promise<{ id: string }>>((id) =>
     Promise.resolve({ id: `new_${id}` }),
   );
@@ -54,8 +59,18 @@ function makeFixture() {
       const response = await rpc(preview.id);
       return { data: { newId: response.id }, lines: [`created ${response.id}`] };
     },
+    auditIds:
+      options.auditIds === true
+        ? (input, preview) => `thing=${input.id} preview=${preview.previewNumber}`
+        : undefined,
   });
   return { tool, rpc, previewCount: () => previews };
+}
+
+function auditLines(stderr: { mock: { calls: unknown[][] } }): string[] {
+  return stderr.mock.calls
+    .map((call) => String(call[0]))
+    .filter((line) => line.startsWith('[depot-mcp write]'));
 }
 
 interface Probe {
@@ -233,13 +248,36 @@ describe('defineWriteTool', () => {
     expect(result.text).toContain('preview 2 of x1');
     expect(result.text).toContain('created new_x1');
 
-    const auditLines = stderr.mock.calls
-      .map((call) => String(call[0]))
-      .filter((line) => line.startsWith('[depot-mcp write]'));
-    expect(auditLines).toHaveLength(1);
-    expect(auditLines[0]).toMatch(
+    const lines = auditLines(stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(
       /^\[depot-mcp write\] depot_probe_write id=x1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
     );
+  });
+
+  it('lets a spec name its own audit ids from the input and the fresh preview', async () => {
+    const { tool } = makeFixture({ auditIds: true });
+    probe = await connect(tool);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const result = await probe.call({ id: 'x1', dryRun: false });
+
+    expect(result.isError).toBe(false);
+    const lines = auditLines(stderr);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatch(
+      /^\[depot-mcp write\] depot_probe_write thing=x1 preview=1 \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/,
+    );
+  });
+
+  it('does not write to stderr on a dry run', async () => {
+    const { tool } = makeFixture();
+    probe = await connect(tool);
+    const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    await probe.call({ id: 'x1' });
+
+    expect(stderr).not.toHaveBeenCalled();
   });
 
   it('writes no audit line for a dry run or a refusal', async () => {
@@ -283,7 +321,11 @@ describe('writeAuditLine', () => {
   it('names only string-valued arguments, never booleans, and stamps an ISO time', () => {
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    writeAuditLine('depot_x', { runId: 'r1', force: true, count: 3 }, new Date('2026-09-06T01:02:03.000Z'));
+    writeAuditLine(
+      'depot_x',
+      defaultAuditIds({ runId: 'r1', force: true, count: 3 }),
+      new Date('2026-09-06T01:02:03.000Z'),
+    );
 
     expect(stderr).toHaveBeenCalledWith('[depot-mcp write] depot_x runId=r1 2026-09-06T01:02:03.000Z');
   });
@@ -291,7 +333,7 @@ describe('writeAuditLine', () => {
   it('says so when there are no ids', () => {
     const stderr = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    writeAuditLine('depot_x', { force: true }, new Date(0));
+    writeAuditLine('depot_x', defaultAuditIds({ force: true }), new Date(0));
 
     expect(stderr).toHaveBeenCalledWith('[depot-mcp write] depot_x (no ids) 1970-01-01T00:00:00.000Z');
   });

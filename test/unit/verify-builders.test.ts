@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { betaTools, mutatingTools, readOnlyTools } from '../../src/tools/index.js';
+import {
+  betaMutatingTools,
+  betaTools,
+  mutatingTools,
+  readOnlyTools,
+  destructiveTools,
+} from '../../src/tools/index.js';
 import {
   emptyDiscovery,
   expandTemplate,
@@ -19,19 +25,22 @@ afterEach(async () => {
 });
 
 const readNames = [...readOnlyTools, ...betaTools].map((tool) => tool.name);
-const writeNames = mutatingTools.map((tool) => tool.name);
+const writeNames = [...mutatingTools, ...betaMutatingTools, ...destructiveTools].map((tool) => tool.name);
 
 describe('verify argument builders', () => {
   it('cover every read-only and beta tool, and nothing else', () => {
     expect(Object.keys(READ_TOOL_ARGUMENTS).sort()).toEqual([...readNames].sort());
   });
 
-  it('cover every mutating tool with a dry-run scenario, and nothing else', () => {
+  it('cover every mutating and destructive tool with a dry-run scenario, and nothing else', () => {
     expect(Object.keys(WRITE_DRY_RUN_ARGUMENTS).sort()).toEqual([...writeNames].sort());
   });
 
-  it('cover every registered tool when both gates are open', async () => {
-    harness = await createHarness({ routes: {}, config: { allowWrites: true, enableBeta: true } });
+  it('cover every registered tool when all three gates are open', async () => {
+    harness = await createHarness({
+      routes: {},
+      config: { allowWrites: true, allowDestructive: true, enableBeta: true },
+    });
     const { tools } = await harness.client.listTools();
 
     for (const tool of tools) {

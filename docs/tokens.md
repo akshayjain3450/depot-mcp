@@ -40,6 +40,10 @@ The short version: **use an Organization token.** It runs every tool, including 
 | `depot_set_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_delete_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_create_project` (write, opt-in) | yes | **no** (`ProjectService` refuses user tokens; the dry run fails at `ListProjects`) |
+| `depot_dispatch_ci_workflow` (write, opt-in) | dry run verified 2026-09-07 (`ListWorkflows`); apply expected to work (same `depot.ci.v1` service as `depot ci dispatch`) | expected yes, not verified |
+| `depot_stop_sandbox`, `depot_kill_sandbox` (write, opt-in, beta) | dry run verified 2026-09-07 for the `not_found` path only, the organization had no sandbox; apply not exercised | expected yes (`SandboxService` accepts user tokens for `ListSandboxes`), not verified |
+| `depot_update_project` (write, opt-in) | yes | **no** (`ProjectService`; the dry run fails at `GetProject`) |
+| `depot_delete_project` (destructive, behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` too) | yes | **no** (`ProjectService` and `BuildService`; the dry run fails at `GetProject`) |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 | Write tools (`DEPOT_MCP_ALLOW_WRITES`): `depot_cancel_ci_run`, `depot_cancel_ci_job`, `depot_retry_ci_failed_jobs`, `depot_retry_ci_job`, `depot_rerun_ci_workflow` | dry run verified; apply expected to work (same CI service) | expected to work for both steps, not yet verified |
@@ -49,11 +53,11 @@ Project tokens run nothing here: Depot's own scope matrix excludes them from Dep
 The beta rows were verified on 2026-09-06 with an Organization token and on 2026-09-07 with a user token belonging to an organization owner (`npm run verify`, see [verification.md](./verification.md)). The sandbox service accepts both kinds; the registry v1beta1 service refuses user tokens the way the core services do. The beta tools stay behind `DEPOT_MCP_ENABLE_BETA` because their upstream contract is unpublished, not because of the token column.
 ## Write tools
 
-The five write tools call `depot.ci.v1.CIService` only, the same service every CI read tool uses, and that service accepts both token kinds. Their dry-run step (the reads `GetRunStatus`, `GetJob`, `GetWorkflow`) has been verified live with an Organization token. The apply step (`CancelRun`, `CancelWorkflow`, `CancelJob`, `RetryJob`, `RetryFailedJobs`, `RerunWorkflow`) has not been exercised against Depot with either token kind; nothing in Depot's scope matrix suggests it would differ from the reads.
+The six Depot CI write tools (the five above plus `depot_dispatch_ci_workflow`) call `depot.ci.v1.CIService` only, the same service every CI read tool uses, and that service accepts both token kinds. The two sandbox writes call `depot.sandbox.v1.SandboxService`, which accepted a user token for `ListSandboxes`; their apply path has not been exercised with either kind. Their dry-run step (the reads `GetRunStatus`, `GetJob`, `GetWorkflow`) has been verified live with an Organization token. The apply step (`CancelRun`, `CancelWorkflow`, `CancelJob`, `RetryJob`, `RetryFailedJobs`, `RerunWorkflow`) has not been exercised against Depot with either token kind; nothing in Depot's scope matrix suggests it would differ from the reads.
 
 Write tools planned on the roadmap for Depot's core services (`depot_create_project` on `depot.core.v1.ProjectService`, for example) will need an Organization token, since those services refuse user tokens for reads and there is no reason to expect writes to differ.
 
-Whatever the token kind, the token is not what keeps writes from happening: `DEPOT_MCP_ALLOW_WRITES` is. See below.
+Whatever the token kind, the token is not what keeps writes from happening: `DEPOT_MCP_ALLOW_WRITES` is, and for the irreversible ones `DEPOT_MCP_ALLOW_DESTRUCTIVE` on top of it. See below.
 
 ## By Depot service
 
@@ -69,7 +73,7 @@ For anyone extending the server. "Refuses" means Depot answers `401 unauthentica
 | `depot.build.v1.RegistryService` (`ListImages`) | accepts | accepts |
 | `depot.ci.v1.CIService` (runs, logs, metrics, artifacts, diagnosis) | accepts | accepts |
 | `depot.ci.v3beta2` secrets and variables | accepts | accepts for admins and owners; `403` for members |
-| `depot.sandbox.v1.SandboxService` (`ListSandboxes`, `GetSandbox`) | accepts | accepts (`ListSandboxes` verified 2026-09-07) |
+| `depot.sandbox.v1.SandboxService` (`ListSandboxes`, `GetSandbox`; `StopSandbox`, `KillSandbox` behind both gates) | accepts | accepts (`ListSandboxes` verified 2026-09-07) |
 | `depot.registry.v1beta1.RegistryService` (`ListRepositories`, `ListImages`, `GetImageDetail`, `GetRetentionPolicy`, `ListTokens`) | accepts | **refuses** (`ListRepositories` verified 2026-09-07) |
 
 Two consequences follow:

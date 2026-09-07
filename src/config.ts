@@ -14,13 +14,32 @@ export interface DepotMcpConfig {
    */
   readonly allowWrites: boolean;
   /**
+   * Second gate, for writes that cannot be undone (`src/tools/writes.ts`, `destructiveTools`).
+   * Off by default and meaningless on its own: a destructive tool is registered only when this
+   * and `allowWrites` are both set, so enabling writes never enables deletion by accident.
+   */
+  readonly allowDestructive: boolean;
+  /**
    * Gate for tools built on Depot APIs that Depot itself labels beta or publishes only as protos
    * (`depot.sandbox.v1`, `depot.registry.v1beta1`). Off by default so a client never sees a tool
    * whose upstream contract may change without notice.
    */
   readonly enableBeta: boolean;
+  /**
+   * Repositories and workflow files `depot_dispatch_ci_workflow` may start, from
+   * DEPOT_MCP_DISPATCH_ALLOWLIST. Undefined when the variable is unset: any repository the token
+   * can see may then be dispatched. An empty list never occurs; a blank variable reads as unset.
+   */
+  readonly dispatchAllowlist: readonly DispatchAllowlistEntry[] | undefined;
   readonly maxLogPages: number;
   readonly outputCharBudget: number;
+}
+
+export interface DispatchAllowlistEntry {
+  /** `owner/name`, compared case-insensitively, the way GitHub treats repository names. */
+  readonly repo: string;
+  /** The workflow file basename, for example `deploy.yml`, compared exactly. */
+  readonly workflow: string;
 }
 
 export class ConfigError extends Error {
@@ -77,6 +96,36 @@ function readPositiveInt(value: string | undefined, fallback: number, name: stri
     throw new ConfigError(`${name} must be a positive integer, ${describeValue(raw)}.`);
   }
   return parsed;
+}
+
+/** `owner/name:workflow-file`: one GitHub repository and one workflow basename, no paths. */
+const ALLOWLIST_ENTRY = /^([A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*):([^\s/\\:]+)$/;
+
+/**
+ * Parses DEPOT_MCP_DISPATCH_ALLOWLIST: comma-separated `owner/name:workflow-file` entries. Any
+ * entry that is not in that shape fails startup, since a typo here would otherwise silently
+ * permit or forbid the wrong workflow.
+ */
+function readDispatchAllowlist(value: string | undefined): DispatchAllowlistEntry[] | undefined {
+  const raw = readOptional(value);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const entries: DispatchAllowlistEntry[] = [];
+  for (const part of raw.split(',')) {
+    const entry = part.trim();
+    if (entry === '') {
+      continue;
+    }
+    const match = ALLOWLIST_ENTRY.exec(entry);
+    if (match === null || match[1] === undefined || match[2] === undefined) {
+      throw new ConfigError(
+        `DEPOT_MCP_DISPATCH_ALLOWLIST entries must look like owner/name:workflow.yml (comma-separated), ${describeValue(entry)}.`,
+      );
+    }
+    entries.push({ repo: match[1].toLowerCase(), workflow: match[2] });
+  }
+  return entries.length === 0 ? undefined : entries;
 }
 
 /** Printable ASCII, no spaces: what an HTTP header value may hold and what Depot tokens use. */
@@ -153,7 +202,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DepotMcpConfig
     orgId: readOptional(env.DEPOT_ORG_ID),
     projectId: readOptional(env.DEPOT_PROJECT_ID),
     allowWrites: readBooleanFlag(env.DEPOT_MCP_ALLOW_WRITES),
+    allowDestructive: readBooleanFlag(env.DEPOT_MCP_ALLOW_DESTRUCTIVE),
     enableBeta: readBooleanFlag(env.DEPOT_MCP_ENABLE_BETA),
+    dispatchAllowlist: readDispatchAllowlist(env.DEPOT_MCP_DISPATCH_ALLOWLIST),
     maxLogPages: readPositiveInt(
       env.DEPOT_MCP_MAX_LOG_PAGES,
       DEFAULT_MAX_LOG_PAGES,
