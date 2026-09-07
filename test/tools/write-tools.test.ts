@@ -244,7 +244,8 @@ describe('depot_set_ci_variable', () => {
     const result = await callTool(harness, 'depot_set_ci_variable', { name, value, dryRun: false });
 
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('Refused, nothing was changed');
+    expect(result.text).toContain('Refused depot_set_ci_variable before calling Depot');
+    expect(result.text).toContain('Nothing was changed');
     expect(result.text).toContain(`rule "${rule}"`);
     expect(result.text).toContain(`depot ci secrets set ${name}`);
     expect(result.text).not.toContain(value);
@@ -418,7 +419,8 @@ describe('depot_delete_ci_variable', () => {
     const result = await callTool(harness, 'depot_delete_ci_variable', { ...args, dryRun: false });
 
     expect(result.isError).toBe(true);
-    expect(result.text).toContain('Refused, nothing was changed');
+    expect(result.text).toContain('Refused depot_delete_ci_variable before calling Depot');
+    expect(result.text).toContain('Nothing was changed');
     expect(result.text).toContain(reason);
     expect(writeCalls(harness)).toEqual([]);
     expect(stderr).not.toHaveBeenCalled();
@@ -518,8 +520,9 @@ describe('depot_create_project', () => {
 
     const result = await callTool(harness, 'depot_create_project', { name: 'worker' });
 
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain('already exists (p2)');
+    expect(result.isError, result.text).toBe(false);
+    expect(String(result.structured.refusal)).toContain('already exists (p2)');
+    expect(result.text).toContain('would be REFUSED');
     expect(harness.callsTo(RPC.listProjects)[1]?.body).toEqual({ pageSize: 100, pageToken: 'page-2' });
   });
 
@@ -618,8 +621,11 @@ describe('depot_create_project', () => {
 
     const result = await callTool(harness, 'depot_create_project', { name: 'edge', regionId: 'ap-south-1' });
 
-    expect(result.isError).toBe(true);
-    expect(result.text).toContain('"ap-south-1" is not a region Depot documents; use us-east-1 or eu-central-1');
+    expect(result.isError, result.text).toBe(false);
+    expect(result.text).toContain(
+      'would be REFUSED: "ap-south-1" is not a region Depot documents; use us-east-1 or eu-central-1',
+    );
+    expect(result.structured.resend).toBeUndefined();
     expect(writeCalls(harness)).toEqual([]);
   });
 

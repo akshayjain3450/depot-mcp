@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `depot_whoami` reports the real count and names of registered write tools (`mutatingToolsAvailable`, `mutatingTools`) and whether beta tools are enabled; the startup banner counts read-only, beta, and mutating tools and names the write tools when the flag is set.
 - `depot_list_builds` shows the cache hit ratio as a percentage next to the cached step count.
 - Push-triggered Depot CI run ids (`ps_` prefix) are recognised by the loose-id tools.
+- The eight write tools share one helper (`src/lib/write.ts`; `write-config.ts` is gone). All of them now word their results the same way (`DRY RUN ...` / `APPLIED ...`), report a dry-run refusal as a result with a `refusal` field rather than an error, and carry a `tool` field; the variable and project writes keep their own audit-line identifiers through the helper's `auditIds` hook, and a credential-shaped variable value is redacted from the preview it is refused in.
+- `depot_get_ci_workflow` reports the latest execution's timing after a rerun (the workflow-level `startedAt` stays at the first start, so the naive span read as 23h58m live) and says "execution N of M" in the headline; a `latestExecution` field carries the execution it used. The rerun and retry previews take their "last wall time" from the latest finished execution for the same reason.
+- `depot_wait_for_ci_run` accepts `workflowId`, polling `GetWorkflow` until the latest execution is terminal, which is what a rerun or retry leaves to watch; `runId` alongside it is cross-checked. The outcome `workflow_terminal`, an `execution` field, and `execution` nodes in `changes` are new.
 
 ### Fixed
 

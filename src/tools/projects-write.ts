@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { readObjectArray, readString } from '../depot/shape.js';
 import { parseProject, type ProjectSummary } from '../lib/project.js';
 import type { ToolContext } from '../lib/tool.js';
-import { defineWriteTool } from '../lib/write-config.js';
+import { defineWriteTool } from '../lib/write.js';
 import { describeProject, projectSchema } from './projects.js';
 
 /** The regions Depot documents for container build projects. */
@@ -54,7 +54,7 @@ export const createProjectTool = defineWriteTool({
 
 dryRun (the default) lists the organization's existing projects, resolves every default (region us-east-1, hardware 16x32, cache 50 GB for 14 days), and says whether a project with this name already exists. Depot allows duplicate names, but they make every later projectId lookup ambiguous, so this tool refuses one unless allowDuplicateName is true. It also refuses a region outside the two Depot documents, us-east-1 and eu-central-1.
 
-Creating a project is not destructive, but it is not idempotent either: two applies make two projects. Needs an Organization token; Depot's ProjectService refuses user tokens. Only registered when DEPOT_MCP_ALLOW_WRITES is set. After the user confirms the preview, call again with dryRun:false to apply. Request shape from Depot's published project.proto; this server has never invoked CreateProject live.`,
+Creating a project is not destructive, but it is not idempotent either: two applies make two projects. Needs an Organization token; Depot's ProjectService refuses user tokens. Only registered when DEPOT_MCP_ALLOW_WRITES is set. Request shape from Depot's published project.proto; this server has never invoked CreateProject live.`,
   inputSchema: {
     name: z
       .string()
@@ -131,7 +131,7 @@ Creating a project is not destructive, but it is not idempotent either: two appl
     }
 
     return {
-      summary: lines.join('\n'),
+      lines,
       data: {
         name: input.name,
         regionId: input.regionId,
@@ -173,7 +173,9 @@ Creating a project is not destructive, but it is not idempotent either: two appl
     });
     const project = parseProject(response);
     return {
-      summary: `Created ${describeProject(project)}. Builds can target it with DEPOT_PROJECT_ID=${project.projectId ?? '<see dashboard>'}.`,
+      lines: [
+        `Created ${describeProject(project)}. Builds can target it with DEPOT_PROJECT_ID=${project.projectId ?? '<see dashboard>'}.`,
+      ],
       data: { project },
     };
   },

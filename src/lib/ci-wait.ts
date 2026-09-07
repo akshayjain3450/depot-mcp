@@ -1,5 +1,12 @@
 import type { DepotApi } from '../depot/api.js';
 import { parseRunTree, type JobNode, type RunTree } from './ci-tree.js';
+import { latestExecution } from './ci-workflow.js';
+import {
+  parseWorkflowDetail,
+  type WorkflowDetail,
+  type WorkflowExecution,
+} from './ci-write-detail.js';
+import { ToolInputError } from './tool.js';
 
 /**
  * Depot documents run status as queued | running | finished | failed | cancelled. The extra
@@ -41,7 +48,7 @@ export function findJob(tree: RunTree, key: string): JobNode | undefined {
   return undefined;
 }
 
-export type NodeKind = 'run' | 'workflow' | 'job' | 'attempt';
+export type NodeKind = 'run' | 'workflow' | 'execution' | 'job' | 'attempt';
 
 export interface NodeChange {
   readonly kind: NodeKind;
@@ -59,8 +66,10 @@ interface NodeState {
   readonly state: string | undefined;
 }
 
-function flatten(tree: RunTree): Map<string, NodeState> {
-  const nodes = new Map<string, NodeState>();
+type NodeMap = Map<string, NodeState>;
+
+function flattenTree(tree: RunTree): NodeMap {
+  const nodes: NodeMap = new Map();
   nodes.set(`run:${tree.runId ?? ''}`, { kind: 'run', name: undefined, state: tree.status });
   for (const [workflowIndex, workflow] of tree.workflows.entries()) {
     nodes.set(`workflow:${workflow.workflowId ?? `#${workflowIndex}`}`, {
@@ -87,10 +96,8 @@ function flatten(tree: RunTree): Map<string, NodeState> {
   return nodes;
 }
 
-/** Every node whose state differs between two snapshots, in tree order of the later one. */
-export function diffTrees(first: RunTree, last: RunTree): NodeChange[] {
-  const before = flatten(first);
-  const after = flatten(last);
+/** Every node whose state differs between two flattened snapshots, in the order of the later one. */
+function diffNodes(before: NodeMap, after: NodeMap): NodeChange[] {
   const changes: NodeChange[] = [];
   for (const [key, node] of after) {
     const previous = before.get(key);
@@ -118,61 +125,63 @@ export function diffTrees(first: RunTree, last: RunTree): NodeChange[] {
   return changes;
 }
 
-export type WaitOutcome = 'run_terminal' | 'job_terminal' | 'timed_out';
-
-export interface WaitOptions {
-  readonly api: Pick<DepotApi, 'getRunStatus'>;
-  readonly sleep: (ms: number) => Promise<void>;
-  readonly now: () => number;
-  readonly runId: string;
-  readonly timeoutMs: number;
-  readonly pollMs: number;
-  readonly untilJobKey?: string | undefined;
+/** Every node whose state differs between two snapshots, in tree order of the later one. */
+export function diffTrees(first: RunTree, last: RunTree): NodeChange[] {
+  return diffNodes(flattenTree(first), flattenTree(last));
 }
 
-export interface WaitResult {
+export type WaitOutcome = 'run_terminal' | 'workflow_terminal' | 'job_terminal' | 'timed_out';
+
+interface PollOptions<TSnapshot> {
+  /** One read of the watched thing; each call is an ordinary unary RPC. */
+  readonly fetch: () => Promise<TSnapshot>;
+  /** The outcome that ends the wait, or undefined to keep polling. */
+  readonly settled: (snapshot: TSnapshot) => WaitOutcome | undefined;
+  readonly diff: (first: TSnapshot, last: TSnapshot) => NodeChange[];
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly now: () => number;
+  readonly timeoutMs: number;
+  readonly pollMs: number;
+}
+
+export interface PollResult<TSnapshot> {
   readonly outcome: WaitOutcome;
-  readonly first: RunTree;
-  readonly last: RunTree;
-  readonly job: JobNode | undefined;
+  readonly first: TSnapshot;
+  readonly last: TSnapshot;
   readonly polls: number;
   readonly elapsedMs: number;
   readonly changes: NodeChange[];
 }
 
 /**
- * Polls `GetRunStatus` until the run (or one named job) reaches a terminal state or the timeout
- * is spent. Sleeps never total more than `timeoutMs` and no poll starts after the deadline, so
- * the call returns within the timeout plus the duration of one status request. Each poll is an
- * ordinary unary RPC under the client's own per-call deadline; nothing here streams.
+ * Polls `fetch` until `settled` names an outcome or the timeout is spent. Sleeps never total
+ * more than `timeoutMs` and no poll starts after the deadline, so the call returns within the
+ * timeout plus the duration of one request. Nothing here streams.
  */
-export async function waitForRun(options: WaitOptions): Promise<WaitResult> {
+async function pollUntil<TSnapshot>(options: PollOptions<TSnapshot>): Promise<PollResult<TSnapshot>> {
   const start = options.now();
   const deadline = start + options.timeoutMs;
   let polls = 0;
-  let first: RunTree | undefined;
+  let first: TSnapshot | undefined;
 
   for (;;) {
-    const tree = parseRunTree(await options.api.getRunStatus(options.runId));
+    const snapshot = await options.fetch();
     polls += 1;
-    first ??= tree;
-    const job = options.untilJobKey === undefined ? undefined : findJob(tree, options.untilJobKey);
+    const initial = first ?? snapshot;
+    first = initial;
 
-    const finish = (outcome: WaitOutcome): WaitResult => ({
+    const finish = (outcome: WaitOutcome): PollResult<TSnapshot> => ({
       outcome,
-      first: first ?? tree,
-      last: tree,
-      job,
+      first: initial,
+      last: snapshot,
       polls,
       elapsedMs: Math.max(0, options.now() - start),
-      changes: diffTrees(first ?? tree, tree),
+      changes: options.diff(initial, snapshot),
     });
 
-    if (isTerminalState(tree.status)) {
-      return finish('run_terminal');
-    }
-    if (job !== undefined && isJobTerminal(job)) {
-      return finish('job_terminal');
+    const outcome = options.settled(snapshot);
+    if (outcome !== undefined) {
+      return finish(outcome);
     }
     const remaining = deadline - options.now();
     if (remaining <= 0) {
@@ -180,4 +189,158 @@ export async function waitForRun(options: WaitOptions): Promise<WaitResult> {
     }
     await options.sleep(Math.min(options.pollMs, remaining));
   }
+}
+
+interface WaitTiming {
+  readonly sleep: (ms: number) => Promise<void>;
+  readonly now: () => number;
+  readonly timeoutMs: number;
+  readonly pollMs: number;
+  readonly untilJobKey?: string | undefined;
+}
+
+/** `job_terminal` when the named job is done, else undefined; shared by both targets. */
+function jobOutcome(tree: RunTree, untilJobKey: string | undefined): WaitOutcome | undefined {
+  if (untilJobKey === undefined) {
+    return undefined;
+  }
+  const job = findJob(tree, untilJobKey);
+  return job !== undefined && isJobTerminal(job) ? 'job_terminal' : undefined;
+}
+
+export interface WaitOptions extends WaitTiming {
+  readonly api: Pick<DepotApi, 'getRunStatus'>;
+  readonly runId: string;
+}
+
+export interface WaitResult extends PollResult<RunTree> {
+  readonly job: JobNode | undefined;
+}
+
+/** Polls `GetRunStatus` until the run (or one named job) reaches a terminal state. */
+export async function waitForRun(options: WaitOptions): Promise<WaitResult> {
+  const result = await pollUntil({
+    fetch: async () => parseRunTree(await options.api.getRunStatus(options.runId)),
+    settled: (tree) =>
+      isTerminalState(tree.status) ? 'run_terminal' : jobOutcome(tree, options.untilJobKey),
+    diff: diffTrees,
+    sleep: options.sleep,
+    now: options.now,
+    timeoutMs: options.timeoutMs,
+    pollMs: options.pollMs,
+  });
+  return {
+    ...result,
+    job: options.untilJobKey === undefined ? undefined : findJob(result.last, options.untilJobKey),
+  };
+}
+
+export interface WorkflowSnapshot {
+  readonly workflowId: string | undefined;
+  readonly name: string | undefined;
+  readonly runId: string | undefined;
+  /** The workflow's own status as Depot reports it. */
+  readonly status: string | undefined;
+  readonly executions: WorkflowExecution[];
+  /** The execution with the highest number; after a rerun, the one that is actually running. */
+  readonly latest: WorkflowExecution | undefined;
+  /** The workflow as a one-workflow run tree, so job lookup, counting and diffing are shared. */
+  readonly tree: RunTree;
+}
+
+export function snapshotWorkflow(detail: WorkflowDetail): WorkflowSnapshot {
+  return {
+    workflowId: detail.workflowId,
+    name: detail.name,
+    runId: detail.runId,
+    status: detail.status,
+    executions: detail.executions,
+    latest: latestExecution(detail.executions),
+    tree: {
+      runId: detail.runId,
+      status: detail.runStatus,
+      workflows: [
+        {
+          workflowId: detail.workflowId,
+          name: detail.name,
+          path: undefined,
+          status: detail.status,
+          jobs: detail.jobs,
+        },
+      ],
+    },
+  };
+}
+
+/**
+ * After a rerun the workflow-level status can lag the new execution, so the latest execution
+ * decides when one exists and carries a status; the workflow's own status is the fallback.
+ */
+export function isWorkflowTerminal(snapshot: WorkflowSnapshot): boolean {
+  const latest = snapshot.latest?.status;
+  return isTerminalState(latest ?? snapshot.status);
+}
+
+function flattenWorkflow(snapshot: WorkflowSnapshot): NodeMap {
+  const nodes = flattenTree(snapshot.tree);
+  for (const [index, execution] of snapshot.executions.entries()) {
+    nodes.set(`execution:${execution.executionId ?? `#${index}`}`, {
+      kind: 'execution',
+      name: `execution ${execution.execution ?? index + 1}`,
+      state: execution.status,
+    });
+  }
+  return nodes;
+}
+
+export function diffWorkflowSnapshots(first: WorkflowSnapshot, last: WorkflowSnapshot): NodeChange[] {
+  return diffNodes(flattenWorkflow(first), flattenWorkflow(last));
+}
+
+export interface WaitForWorkflowOptions extends WaitTiming {
+  readonly api: Pick<DepotApi, 'getWorkflow'>;
+  readonly workflowId: string;
+  /** When given, the workflow must belong to this run; a mismatch ends the wait on the first poll. */
+  readonly expectedRunId?: string | undefined;
+}
+
+export interface WorkflowWaitResult extends PollResult<WorkflowSnapshot> {
+  readonly job: JobNode | undefined;
+}
+
+/**
+ * Polls `GetWorkflow` until the latest execution (or one named job) reaches a terminal state.
+ * This is what to watch after `RerunWorkflow` or `RetryFailedJobs`: they create a new execution
+ * of the same workflow, not a new run.
+ */
+export async function waitForWorkflow(options: WaitForWorkflowOptions): Promise<WorkflowWaitResult> {
+  const result = await pollUntil({
+    fetch: async () => {
+      const snapshot = snapshotWorkflow(parseWorkflowDetail(await options.api.getWorkflow(options.workflowId)));
+      if (
+        options.expectedRunId !== undefined &&
+        snapshot.runId !== undefined &&
+        snapshot.runId !== options.expectedRunId
+      ) {
+        throw new ToolInputError(
+          `Workflow ${options.workflowId} belongs to run ${snapshot.runId}, not to run ${options.expectedRunId} as the arguments claim. Pass just one of runId and workflowId, or check the ids with depot_get_ci_run.`,
+        );
+      }
+      return snapshot;
+    },
+    settled: (snapshot) =>
+      isWorkflowTerminal(snapshot)
+        ? 'workflow_terminal'
+        : jobOutcome(snapshot.tree, options.untilJobKey),
+    diff: diffWorkflowSnapshots,
+    sleep: options.sleep,
+    now: options.now,
+    timeoutMs: options.timeoutMs,
+    pollMs: options.pollMs,
+  });
+  return {
+    ...result,
+    job:
+      options.untilJobKey === undefined ? undefined : findJob(result.last.tree, options.untilJobKey),
+  };
 }

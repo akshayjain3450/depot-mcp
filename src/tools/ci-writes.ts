@@ -117,9 +117,10 @@ async function workflowPreview(
   const detail = parseWorkflowDetail(await context.api.getWorkflow(workflowId));
   const failed = detail.jobs.filter(isFailedJob);
   const active = detail.jobs.filter((job) => isActiveState(job.status));
+  // The latest finished execution's own timing; the workflow-level fields span every execution.
   const executionsDone = detail.executions.filter((execution) => isTerminalState(execution.status));
   const previousDurationSeconds =
-    detail.durationSeconds ?? executionsDone.at(-1)?.durationSeconds;
+    executionsDone.at(-1)?.durationSeconds ?? detail.durationSeconds;
 
   const lines = [
     `Workflow ${detail.workflowId ?? workflowId} ${detail.name === undefined ? '' : `"${truncateText(detail.name, LABEL_CHAR_LIMIT).text}" `}is ${detail.status ?? 'in an unknown state'}${detail.repo === undefined ? '' : ` in ${detail.repo}`}${detail.runId === undefined ? '' : ` (run ${detail.runId}, ${detail.runStatus ?? 'unknown status'})`}.`,

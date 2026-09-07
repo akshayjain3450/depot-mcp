@@ -247,7 +247,7 @@ describe('depot_get_ci_workflow', () => {
     const lines = result.text.split('\n');
 
     expect(lines[0]).toBe(
-      'Workflow "CI" (workflowId=wf_2b8e11) — failed, 7m32s, 3 job(s), 1 failed.',
+      'Workflow "CI" (workflowId=wf_2b8e11) — failed, 7m32s (execution 1 of 1), 3 job(s), 1 failed.',
     );
     expect(lines[1]).toBe('Run run_7f3d9c21 — failed · acme/api@9c1f4ab7 · refs/heads/main · via push · 7m28s.');
     expect(lines[2]).toBe('Executions: #1 failed, 7m32s, executionId=exec_1a7c3e');
@@ -288,6 +288,49 @@ describe('depot_get_ci_workflow', () => {
     expect(result.text).toContain(
       'Executions (2, oldest first): #1 failed, 7m32s, executionId=exec_1a7c3e; #2 failed, 6m, executionId=exec_2b8d4f',
     );
+  });
+
+  it('after a rerun, reports the latest execution as the duration rather than first start to last finish', async () => {
+    harness = await createHarness({ routes: { [RPC.getWorkflow]: ok(fixture('workflow-rerun')) } });
+
+    const result = await callTool(harness, 'depot_get_ci_workflow', { workflowId: 'wf_2b8e11' });
+    const lines = result.text.split('\n');
+
+    expect(result.isError, result.text).toBe(false);
+    // Depot's top-level workflow timing spans 2026-09-03T14:02:13Z to 2026-09-04T14:00:20Z.
+    expect(lines[0]).toBe(
+      'Workflow "CI" (workflowId=wf_2b8e11) — finished, 2m15s (execution 2 of 2), 2 job(s), 0 failed.',
+    );
+    expect(lines[0]).not.toContain('23h');
+    expect(asRecord(result.structured.workflow)).toMatchObject({
+      status: 'finished',
+      startedAt: '2026-09-04T13:58:05Z',
+      finishedAt: '2026-09-04T14:00:20Z',
+      durationSeconds: 135,
+    });
+    expect(asRecord(result.structured.latestExecution)).toMatchObject({
+      executionId: 'exec_2b8d4f',
+      execution: 2,
+      status: 'finished',
+      durationSeconds: 135,
+    });
+    expect(result.structured.executionCount).toBe(2);
+    expect(records(result.structured.executions).map((execution) => execution.durationSeconds)).toEqual([452, 135]);
+    expect(result.text).not.toContain('depot_diagnose_ci_failure');
+  });
+
+  it('picks the highest execution number as latest even when Depot lists them out of order', async () => {
+    const doc = fixture('workflow-rerun');
+    const executions = records(doc.executions);
+    harness = await createHarness({
+      routes: { [RPC.getWorkflow]: ok({ ...doc, executions: [executions[1], executions[0]] }) },
+    });
+
+    const result = await callTool(harness, 'depot_get_ci_workflow', { workflowId: 'wf_2b8e11' });
+
+    expect(asRecord(result.structured.latestExecution).execution).toBe(2);
+    expect(asRecord(result.structured.workflow).durationSeconds).toBe(135);
+    expect(result.text).toContain('2m15s (execution 2 of 2)');
   });
 
   it('reads the CLI snake_case, prefixed-enum spelling identically', async () => {

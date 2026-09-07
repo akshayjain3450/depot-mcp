@@ -4,7 +4,7 @@ import { DepotApiError } from '../depot/errors.js';
 import { readBoolean, readObject, readString, type JsonObject } from '../depot/shape.js';
 import { redactValue } from '../lib/redact.js';
 import type { ToolContext } from '../lib/tool.js';
-import { defineWriteTool } from '../lib/write-config.js';
+import { defineWriteTool } from '../lib/write.js';
 import {
   ATTRIBUTE_KEYS,
   describeAttributes,
@@ -114,7 +114,7 @@ export const setCiVariableTool = defineWriteTool({
 
 A variable is a name with variants; each variant carries a value and optional scoping (repository, environment, branch, workflow). Without variantName this writes the "default" variant, exactly as the CLI does, and the scoping given here replaces that variant's scoping. dryRun (the default) fetches the current variable and shows the variant that would be overwritten, with its current value.
 
-Refuses, before any write: a value this server's redaction rules classify as a credential (use a Depot secret for those; variables are readable by anyone who can list them), and a name that already belongs to a Depot CI secret, since \${{ vars.X }} next to \${{ secrets.X }} is a mistake waiting to happen. Only registered when DEPOT_MCP_ALLOW_WRITES is set. After the user confirms the preview, call again with dryRun:false to apply. ${FIELD_NAME_NOTE}`,
+Refuses, before any write: a value this server's redaction rules classify as a credential (use a Depot secret for those; variables are readable by anyone who can list them), and a name that already belongs to a Depot CI secret, since \${{ vars.X }} next to \${{ secrets.X }} is a mistake waiting to happen. Only registered when DEPOT_MCP_ALLOW_WRITES is set. ${FIELD_NAME_NOTE}`,
   inputSchema: {
     name: nameSchema,
     value: z
@@ -180,7 +180,11 @@ Refuses, before any write: a value this server's redaction rules classify as a c
         `${input.name} variant "${variantName}" would be overwritten. Currently: ${describeVariant(existingVariant)}`,
       );
     }
-    lines.push(`New value: ${input.value}`, `New scope: ${describeAttributes(scope)}`);
+    // A credential-shaped value is refused below; echoing it here would put it in the preview.
+    lines.push(
+      `New value: ${redaction.reason === undefined ? input.value : redaction.value}`,
+      `New scope: ${describeAttributes(scope)}`,
+    );
     if (input.description !== undefined) {
       lines.push(`Description: ${input.description}`);
     }
@@ -192,11 +196,11 @@ Refuses, before any write: a value this server's redaction rules classify as a c
     }
 
     return {
-      summary: lines.join('\n'),
+      lines,
       data: {
         name: input.name,
         variantName,
-        value: input.value,
+        value: redaction.reason === undefined ? input.value : redaction.value,
         scope,
         variableExists: variable !== undefined,
         variableId: variable?.id,
@@ -236,7 +240,7 @@ Refuses, before any write: a value this server's redaction rules classify as a c
           ? 'added'
           : 'updated';
     return {
-      summary: `${input.name}: ${verb} variant "${preview.variantName}" (${describeAttributes(preview.scope)}).`,
+      lines: [`${input.name}: ${verb} variant "${preview.variantName}" (${describeAttributes(preview.scope)}).`],
       data: {
         variableId: readString(variable, 'id') ?? preview.variableId,
         variantId: readString(variant, 'id'),
@@ -254,7 +258,7 @@ export const deleteCiVariableTool = defineWriteTool({
 
 Select the variant by variantName and/or by scoping attributes (repository, environment, branch, workflow); the selector must match exactly one variant. dryRun (the default) lists the variable's variants with their values, marks which would go, and changes nothing. Deleting the last variant removes the variable itself, and Depot reports that.
 
-Refuses, before any write: a name Depot does not have; a selector that matches no variant or more than one; a call with no selector unless allVariants is true, so a whole-variable delete is always explicit; and allVariants combined with a selector. Values are shown with this server's credential redaction applied. Only registered when DEPOT_MCP_ALLOW_WRITES is set. After the user confirms the preview, call again with dryRun:false to apply. ${FIELD_NAME_NOTE}`,
+Refuses, before any write: a name Depot does not have; a selector that matches no variant or more than one; a call with no selector unless allVariants is true, so a whole-variable delete is always explicit; and allVariants combined with a selector. Values are shown with this server's credential redaction applied. Only registered when DEPOT_MCP_ALLOW_WRITES is set. ${FIELD_NAME_NOTE}`,
   inputSchema: {
     name: nameSchema,
     variantName: z
@@ -315,7 +319,7 @@ Refuses, before any write: a name Depot does not have; a selector that matches n
     }
 
     return {
-      summary: lines.join('\n'),
+      lines,
       data: {
         name: input.name,
         variableExists: variable !== undefined,
@@ -368,7 +372,7 @@ Refuses, before any write: a name Depot does not have; a selector that matches n
         .map((variant) => variant.id)
         .filter((id): id is string => id !== undefined);
       return {
-        summary: `Deleted ${preview.name} and its ${preview.variants.length} variant(s).`,
+        lines: [`Deleted ${preview.name} and its ${preview.variants.length} variant(s).`],
         data: { deletedVariable: true, deletedVariantIds: ids },
       };
     }
@@ -381,9 +385,11 @@ Refuses, before any write: a name Depot does not have; a selector that matches n
     const response = await context.api.deleteVariableVariant(variantId);
     const deletedVariable = readBoolean(response, 'deletedVariable') ?? false;
     return {
-      summary: deletedVariable
-        ? `Deleted variant "${variantLabel(target)}" of ${preview.name}; it was the last one, so the variable is gone too.`
-        : `Deleted variant "${variantLabel(target)}" of ${preview.name} (${describeAttributes(target.attributes)}); ${preview.variants.length - 1} variant(s) remain.`,
+      lines: [
+        deletedVariable
+          ? `Deleted variant "${variantLabel(target)}" of ${preview.name}; it was the last one, so the variable is gone too.`
+          : `Deleted variant "${variantLabel(target)}" of ${preview.name} (${describeAttributes(target.attributes)}); ${preview.variants.length - 1} variant(s) remain.`,
+      ],
       data: { deletedVariable, deletedVariantIds: [variantId] },
     };
   },
