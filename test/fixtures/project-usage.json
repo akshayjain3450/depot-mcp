@@ -1,0 +1,21 @@
+{
+  "usage": [
+    {
+      "projectId": "proj_api7f2",
+      "buildCount": 2,
+      "buildDurationSeconds": 12,
+      "layerCacheSizeGb": 1
+    },
+    {
+      "projectId": "proj_web3c9",
+      "buildCount": 41,
+      "buildDurationSeconds": 7380,
+      "layerCacheSizeGb": 63
+    },
+    {
+      "projectId": "proj_idle00",
+      "buildCount": 0,
+      "buildDurationSeconds": 0
+    }
+  ]
+}

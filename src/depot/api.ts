@@ -17,6 +17,8 @@ const CORE_BUILD = 'depot.core.v1.BuildService';
 const CORE_USAGE = 'depot.core.v1.UsageService';
 const BUILD = 'depot.build.v1.BuildService';
 const BUILD_REGISTRY = 'depot.build.v1.RegistryService';
+const SANDBOX = 'depot.sandbox.v1.SandboxService';
+const REGISTRY = 'depot.registry.v1beta1.RegistryService';
 
 function rpc(service: string, method: string): RpcTarget {
   return { service, method };
@@ -27,6 +29,17 @@ export interface ListRunsRequest {
   repo?: string | undefined;
   sha?: string | undefined;
   trigger?: string | undefined;
+  pr?: number | undefined;
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+}
+
+export interface ListWorkflowsRequest {
+  name?: string | undefined;
+  repo?: string | undefined;
+  status?: string[] | undefined;
+  trigger?: string | undefined;
+  sha?: string | undefined;
   pr?: number | undefined;
   pageSize?: number | undefined;
   pageToken?: string | undefined;
@@ -86,6 +99,37 @@ export interface UsageWindow {
 }
 
 /**
+ * From depot/sandbox-sdk sandbox.proto. Protobuf JSON spells enum values by their full name, and
+ * Depot's JSON binding accepted `SANDBOX_STATUS_RUNNING` inside `filter.states` on 2026-09-06.
+ */
+export interface ListSandboxesRequest {
+  pageSize?: number | undefined;
+  pageToken?: string | undefined;
+  filter?:
+    | {
+        states?: string[] | undefined;
+        createdAfter?: string | undefined;
+        createdBefore?: string | undefined;
+      }
+    | undefined;
+}
+
+/** The registry service pages by number (`page`, `pageSize`, `hasMore`), not by token. */
+export interface RegistryPageRequest {
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  query?: string | undefined;
+}
+
+export interface ListRegistryImagesRequest {
+  repository: string;
+  page?: number | undefined;
+  pageSize?: number | undefined;
+  tagQuery?: string | undefined;
+  tagStatus?: string | undefined;
+}
+
+/**
  * Typed entry points for the Depot RPCs this server actually uses. Responses stay as
  * `JsonObject`: `depot.ci.v1` is documented in prose but published in neither `depot/proto` nor
  * the Buf Schema Registry, so hand-written response interfaces would assert a contract nobody
@@ -114,6 +158,15 @@ export class DepotApi {
 
   listTrustPolicies(projectId: string): Promise<JsonObject> {
     return this.client.call(rpc(CORE_PROJECT, 'ListTrustPolicies'), { projectId });
+  }
+
+  /**
+   * Per depot/proto, ListTokensResponse.Token carries only token_id and description; the secret
+   * exists solely in CreateToken's response, which this server never calls. Verified live
+   * 2026-09-06 (an organization without project tokens answers `{}`).
+   */
+  listTokens(projectId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'ListTokens'), { projectId });
   }
 
   listBuilds(request: {
@@ -165,6 +218,12 @@ export class DepotApi {
     return this.client.call(rpc(CORE_USAGE, 'GetProjectUsage'), { ...request });
   }
 
+  listProjectUsage(
+    request: UsageWindow & { pageSize?: number | undefined; pageToken?: string | undefined },
+  ): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_USAGE, 'ListProjectUsage'), { ...request });
+  }
+
   listRuns(request: ListRunsRequest): Promise<JsonObject> {
     return this.client.call(rpc(CI, 'ListRuns'), { ...request });
   }
@@ -175,6 +234,22 @@ export class DepotApi {
 
   getRunStatus(runId: string): Promise<JsonObject> {
     return this.client.call(rpc(CI, 'GetRunStatus'), { runId });
+  }
+
+  listWorkflows(request: ListWorkflowsRequest): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'ListWorkflows'), { ...request });
+  }
+
+  getWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetWorkflow'), { workflowId });
+  }
+
+  getJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetJob'), { jobId });
+  }
+
+  getAttempt(attemptId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'GetAttempt'), { attemptId });
   }
 
   getRunMetrics(runId: string): Promise<JsonObject> {
@@ -215,6 +290,34 @@ export class DepotApi {
     });
   }
 
+  // Mutating RPCs. Only the write tools behind DEPOT_MCP_ALLOW_WRITES call these; their response
+  // shapes are undocumented, so callers read whatever ids come back through `shape.ts`.
+  // Request bodies confirmed against Depot on 2026-09-06: each takes a single id.
+
+  cancelRun(runId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelRun'), { runId });
+  }
+
+  cancelWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelWorkflow'), { workflowId });
+  }
+
+  cancelJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelJob'), { jobId });
+  }
+
+  retryJob(jobId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RetryJob'), { jobId });
+  }
+
+  retryFailedJobs(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RetryFailedJobs'), { workflowId });
+  }
+
+  rerunWorkflow(workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RerunWorkflow'), { workflowId });
+  }
+
   /**
    * v3beta2 secret/variable list filters are undocumented, and Connect's JSON codec rejects
    * unknown fields, so the request is deliberately empty and all filtering happens client-side.
@@ -226,4 +329,96 @@ export class DepotApi {
   listVariables(): Promise<JsonObject> {
     return this.client.call(rpc(VARIABLES, 'ListVariables'), {});
   }
+
+  // Beta surfaces below. Both services answered the JSON binding with an Organization token on
+  // 2026-09-06 (empty lists on a trial organization; `not_found` for unknown ids), so no binary
+  // codec is needed. They are reachable only through tools gated by DEPOT_MCP_ENABLE_BETA.
+
+  listSandboxes(request: ListSandboxesRequest = {}): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'ListSandboxes'), { ...request });
+  }
+
+  /** GetSandbox takes a SandboxRef, whose only selector today is `id`. */
+  getSandbox(sandboxId: string): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'GetSandbox'), { id: sandboxId });
+  }
+
+  listRegistryRepositories(request: RegistryPageRequest = {}): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'ListRepositories'), { ...request });
+  }
+
+  /** Answers `invalid_argument: Invalid repository` unless `repository` is set (observed live). */
+  listRegistryImages(request: ListRegistryImagesRequest): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'ListImages'), { ...request });
+  }
+
+  /** `reference` is a tag or a digest. */
+  getRegistryImageDetail(request: { repository: string; reference: string }): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'GetImageDetail'), { ...request });
+  }
+
+  /** An empty object means no policy is configured for the repository. */
+  getRegistryRetentionPolicy(repository: string): Promise<JsonObject> {
+    return this.client.call(rpc(REGISTRY, 'GetRetentionPolicy'), { repository });
+  }
+  /**
+   * Verified live on 2026-09-06: the lookup is a oneof of `id` or `name`; a missing variable is
+   * `not_found` "variable 'X' not found", neither field is `invalid_argument`.
+   */
+  getVariable(name: string): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'GetVariable'), { name });
+  }
+
+  /** Same lookup as `getVariable`; verified live the same day ("secret 'X' not found"). */
+  getSecret(name: string): Promise<JsonObject> {
+    return this.client.call(rpc(SECRETS, 'GetSecret'), { name });
+  }
+
+  /**
+   * Mutating. Field names for the three variable writes come from the generated bindings Depot's
+   * open-source CLI vendors (`pkg/proto/depot/ci/v3beta2/variables.pb.go`), not from a live call:
+   * this project has never invoked them. `variantName` defaults to "default" server-side.
+   */
+  setVariableVariant(request: SetVariableVariantRequest): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'SetVariableVariant'), { ...request });
+  }
+
+  /** Mutating. Answers `{deletedVariable: true}` when the last variant went with it. */
+  deleteVariableVariant(variantId: string): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'DeleteVariableVariant'), { variantId });
+  }
+
+  /** Mutating. Removes the variable and every variant; the lookup oneof matches GetVariable. */
+  deleteVariable(lookup: { id: string } | { name: string }): Promise<JsonObject> {
+    return this.client.call(rpc(VARIABLES, 'DeleteVariable'), { ...lookup });
+  }
+
+  /**
+   * Mutating. Shape from `depot/proto` `CreateProjectRequest`; `hardware` travels as the enum
+   * name (`HARDWARE_16X32`), the spelling Depot itself uses in `ListProjects` responses.
+   */
+  createProject(request: CreateProjectRequest): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'CreateProject'), { ...request });
+  }
+}
+
+export interface VariableAttribute {
+  /** One of repository, environment, branch, workflow. */
+  key: string;
+  value: string;
+}
+
+export interface SetVariableVariantRequest {
+  variableName: string;
+  variantName?: string | undefined;
+  value: string;
+  description?: string | undefined;
+  attributes: VariableAttribute[];
+}
+
+export interface CreateProjectRequest {
+  name: string;
+  regionId: string;
+  cachePolicy?: { keepDays: number; keepGb: number } | undefined;
+  hardware?: string | undefined;
 }

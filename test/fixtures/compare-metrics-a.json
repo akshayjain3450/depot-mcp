@@ -1,0 +1,77 @@
+{
+  "run": {
+    "runId": "run_cmp_a",
+    "repo": "acme/api",
+    "sha": "aaaa1111bbbb2222cccc3333dddd4444eeee5555",
+    "status": "failed",
+    "startedAt": "2026-09-05T10:00:05.100Z",
+    "finishedAt": "2026-09-05T10:03:05.400Z"
+  },
+  "workflows": [
+    {
+      "workflow": { "workflowId": "wf_cmp_a", "name": "ci", "status": "failed" },
+      "jobs": [
+        {
+          "job": {
+            "jobId": "job_a_lint",
+            "jobKey": "ci.yml:lint",
+            "status": "finished",
+            "conclusion": "success",
+            "startedAt": "2026-09-05T10:00:10Z",
+            "finishedAt": "2026-09-05T10:00:30Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_a_lint_1", "attempt": 1, "status": "finished" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 4, "peakMemoryUtilization": 0.1, "averageMemoryUtilization": 0.08 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_a_test",
+            "jobKey": "ci.yml:test",
+            "status": "failed",
+            "conclusion": "failure",
+            "startedAt": "2026-09-05T10:00:10Z",
+            "finishedAt": "2026-09-05T10:01:45Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_a_test_1", "attempt": 1, "status": "failed" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 19, "peakMemoryUtilization": 0.42, "averageMemoryUtilization": 0.3 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_a_build",
+            "jobKey": "ci.yml:build",
+            "status": "finished",
+            "conclusion": "success",
+            "startedAt": "2026-09-05T10:01:50Z",
+            "finishedAt": "2026-09-05T10:02:50Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_a_build_1", "attempt": 1, "status": "finished" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 12, "peakMemoryBytes": "1610612736", "peakMemoryUtilization": 0.19 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_a_deploy",
+            "jobKey": "ci.yml:deploy",
+            "status": "skipped"
+          },
+          "attempts": []
+        }
+      ]
+    }
+  ],
+  "snapshotAt": "2026-09-05T12:00:00Z"
+}

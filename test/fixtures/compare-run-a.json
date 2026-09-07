@@ -1,0 +1,13 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_cmp_a",
+  "repo": "acme/api",
+  "ref": "refs/heads/main",
+  "sha": "aaaa1111bbbb2222cccc3333dddd4444eeee5555",
+  "headSha": "aaaa1111bbbb2222cccc3333dddd4444eeee5555",
+  "trigger": "push",
+  "status": "failed",
+  "createdAt": "2026-09-05T10:00:00Z",
+  "startedAt": "2026-09-05T10:00:05Z",
+  "finishedAt": "2026-09-05T10:03:05Z"
+}

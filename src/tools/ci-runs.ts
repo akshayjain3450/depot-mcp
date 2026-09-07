@@ -7,6 +7,7 @@ import {
   parseRunSummary,
   parseRunTree,
   type JobNode,
+  type RunSummary,
   type RunTree,
 } from '../lib/ci-tree.js';
 import { formatDuration } from '../lib/time.js';
@@ -29,6 +30,20 @@ const runSummarySchema = z.object({
 });
 
 const ALL_RUN_STATUSES = ['queued', 'running', 'finished', 'failed', 'cancelled'] as const;
+
+/** One line per run, shared by the list tool and the failed-runs resource. */
+export function describeRun(run: RunSummary): string {
+  const bits = [
+    run.status ?? 'unknown status',
+    run.repo ?? 'unknown repo',
+    run.sha === undefined ? undefined : run.sha.slice(0, 8),
+    run.ref,
+    run.trigger === undefined ? undefined : `via ${run.trigger}`,
+    formatDuration(run.durationSeconds),
+    run.createdAt,
+  ].filter((bit): bit is string => bit !== undefined);
+  return `${run.runId ?? 'unknown id'} — ${bits.join(' · ')}`;
+}
 
 export const listCiRunsTool = defineTool({
   name: 'depot_list_ci_runs',
@@ -112,16 +127,7 @@ Returns identity, status and timing only. It does not return logs or failure det
 
     text.push(`${runs.length} Depot CI run(s), newest first:`);
     for (const run of runs) {
-      const bits = [
-        run.status ?? 'unknown status',
-        run.repo ?? 'unknown repo',
-        run.sha === undefined ? undefined : run.sha.slice(0, 8),
-        run.ref,
-        run.trigger === undefined ? undefined : `via ${run.trigger}`,
-        formatDuration(run.durationSeconds),
-        run.createdAt,
-      ].filter((bit): bit is string => bit !== undefined);
-      text.push(`  ${run.runId ?? 'unknown id'} — ${bits.join(' · ')}`);
+      text.push(`  ${describeRun(run)}`);
     }
     if (nextPageToken !== undefined) {
       text.push('', `More runs available: re-call with pageToken="${nextPageToken}".`);
@@ -152,7 +158,8 @@ function renderJob(text: TextBudget, job: JobNode, indent: string): void {
   }
 }
 
-function renderTree(tree: RunTree, failedOnly: boolean, charBudget: number): string {
+/** Renders the workflow -> job -> attempt tree; shared by depot_get_ci_run and the run resource. */
+export function renderRunTree(tree: RunTree, failedOnly: boolean, charBudget: number): string {
   const text = new TextBudget(charBudget);
   const counts = countJobs(tree);
   text.push(
@@ -252,7 +259,7 @@ This does not explain failures — it only reports structure and status. For roo
       : tree.workflows;
 
     return {
-      summary: renderTree(
+      summary: renderRunTree(
         { ...tree, runId: tree.runId ?? run.runId },
         input.failedOnly,
         context.config.outputCharBudget,

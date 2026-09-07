@@ -1,0 +1,38 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_cmp_a",
+  "status": "failed",
+  "workflows": [
+    {
+      "workflowId": "wf_cmp_a",
+      "name": "ci",
+      "status": "failed",
+      "jobs": [
+        {
+          "jobId": "job_a_lint",
+          "jobKey": "ci.yml:lint",
+          "status": "finished",
+          "attempts": [{ "attemptId": "att_a_lint_1", "attempt": 1, "status": "finished" }]
+        },
+        {
+          "jobId": "job_a_test",
+          "jobKey": "ci.yml:test",
+          "status": "failed",
+          "attempts": [{ "attemptId": "att_a_test_1", "attempt": 1, "status": "failed" }]
+        },
+        {
+          "jobId": "job_a_build",
+          "jobKey": "ci.yml:build",
+          "status": "finished",
+          "attempts": [{ "attemptId": "att_a_build_1", "attempt": 1, "status": "finished" }]
+        },
+        {
+          "jobId": "job_a_deploy",
+          "jobKey": "ci.yml:deploy",
+          "status": "skipped",
+          "attempts": []
+        }
+      ]
+    }
+  ]
+}

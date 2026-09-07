@@ -1,0 +1,13 @@
+{
+  "tokens": [
+    {
+      "tokenId": "tok_9f2a1c",
+      "description": "GitHub Actions deploy"
+    },
+    {
+      "tokenId": "tok_0b7d3e",
+      "description": "local dev laptop",
+      "createdAt": "2026-06-01T08:00:00Z"
+    }
+  ]
+}

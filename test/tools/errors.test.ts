@@ -33,6 +33,7 @@ async function connectWithFetch(fetchImpl: FetchLike, token = TOKEN): Promise<Ha
   return {
     client,
     calls: [],
+    sleeps: [],
     callsTo: () => [],
     close: async () => {
       await client.close();
@@ -225,6 +226,8 @@ describe('defineTool internal errors', () => {
         }),
       ),
       config: testConfig(),
+      sleep: () => Promise.resolve(),
+      now: () => Date.now(),
     };
     tool.register(server, context);
     const client = new Client({ name: 'test-client', version: '0.0.0' });

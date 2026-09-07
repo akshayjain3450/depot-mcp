@@ -145,3 +145,108 @@ Set withDownloadUrl=true to also fetch signed HTTPS URLs, which are minted one r
     };
   },
 });
+
+export interface SignedUrlExpiry {
+  readonly expiresAt: string;
+  readonly expiresInSeconds: number;
+}
+
+/**
+ * A signed S3 URL carries its own lifetime in the query string (`X-Amz-Date` plus
+ * `X-Amz-Expires` seconds). Read it when present so the caller knows how long the link lives;
+ * anything unparseable is reported as unknown rather than guessed.
+ */
+export function signedUrlExpiry(url: string, now: number): SignedUrlExpiry | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const date = parsed.searchParams.get('X-Amz-Date');
+  const expires = Number(parsed.searchParams.get('X-Amz-Expires'));
+  const match = date === null ? null : /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(date);
+  if (match === null || !Number.isFinite(expires) || expires <= 0) {
+    return undefined;
+  }
+  const [, year, month, day, hour, minute, second] = match;
+  const signedAt = Date.parse(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`);
+  if (Number.isNaN(signedAt)) {
+    return undefined;
+  }
+  const expiresAtMs = signedAt + expires * 1000;
+  return {
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    expiresInSeconds: Math.round((expiresAtMs - now) / 1000),
+  };
+}
+
+function formatExpiry(seconds: number): string {
+  return seconds < 90 ? `${seconds} seconds` : `${Math.round(seconds / 60)} minutes`;
+}
+
+export const URL_HANDLING_WARNING =
+  'This URL is a bearer capability: anyone who has it can download the artifact until it expires, with no Depot token. Use it right away and do not paste it into commit messages, issues, pull requests, chat, logs, or files.';
+
+export const getCiArtifactUrlTool = defineTool({
+  name: 'depot_get_ci_artifact_url',
+  title: 'Get a signed download URL for one Depot CI artifact',
+  description: `Mint a short-lived signed download URL for one Depot CI artifact, by artifact id.
+
+Use this when you already know which artifact you want (from depot_list_ci_artifacts) and need to fetch it: a JUnit report to read the failing test names, a screenshot from a browser test, a built binary. Download it with curl or fetch as soon as you have the URL, since Depot signs it for minutes, not hours.
+
+The URL is a bearer capability. Anyone holding it can download the artifact until it expires, so treat it like a credential: use it immediately and never write it anywhere durable (commit messages, issues, chat, files). This tool returns the URL only; it does not download the artifact or read its contents, and it cannot upload, replace, or delete anything.
+
+To see what a run produced, or to get URLs for several artifacts in one call, use depot_list_ci_artifacts (with withDownloadUrl=true) instead.`,
+  inputSchema: {
+    artifactId: z
+      .string()
+      .trim()
+      .min(1)
+      .describe('The artifact id, as returned by depot_list_ci_artifacts.'),
+  },
+  outputSchema: {
+    artifactId: z.string(),
+    downloadUrl: z.string().describe('Signed HTTPS URL. Short-lived; do not store it.'),
+    expiresAt: z.string().optional().describe('When the signature expires, when the URL says so.'),
+    expiresInSeconds: z.number().optional(),
+    warning: z.string().describe('Handling instructions: the URL is a bearer capability.'),
+  },
+  handler: async (input, context) => {
+    const response = await context.api.getArtifactDownloadUrl(input.artifactId);
+    const downloadUrl = readString(response, 'downloadUrl', 'url', 'signedUrl');
+    if (downloadUrl === undefined) {
+      throw new ToolInputError(
+        `Depot answered without a download URL for artifact ${input.artifactId}. The artifact may have expired or been deleted; depot_list_ci_artifacts shows what is still stored.`,
+      );
+    }
+    const expiry = signedUrlExpiry(downloadUrl, context.now());
+    const expiresAt = readString(response, 'expiresAt', 'expiry') ?? expiry?.expiresAt;
+
+    const lifetime =
+      expiry === undefined
+        ? 'short-lived'
+        : expiry.expiresInSeconds > 0
+          ? `expires in about ${formatExpiry(expiry.expiresInSeconds)}, at ${expiry.expiresAt}`
+          : 'the signature appears to have expired already; call again for a fresh one';
+
+    const text = new TextBudget(context.config.outputCharBudget);
+    text.push(
+      `Signed download URL for artifact ${input.artifactId} (${lifetime}):`,
+      downloadUrl,
+      '',
+      URL_HANDLING_WARNING,
+    );
+
+    return {
+      summary: text.render(),
+      data: {
+        artifactId: input.artifactId,
+        downloadUrl,
+        expiresAt,
+        expiresInSeconds: expiry?.expiresInSeconds,
+        warning: URL_HANDLING_WARNING,
+      },
+    };
+  },
+});

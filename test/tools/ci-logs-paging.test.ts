@@ -110,6 +110,7 @@ async function createPagedHarness(options: {
   return {
     client,
     calls,
+    sleeps: [],
     callsTo: (rpc) => calls.filter((call) => call.rpc === rpc),
     close: async () => {
       await client.close();

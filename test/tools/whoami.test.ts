@@ -28,6 +28,10 @@ describe('depot_whoami', () => {
     expect(result.structured.projectCount).toBe(2);
     expect(result.structured.writesEnabled).toBe(false);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
+    expect(result.structured.betaEnabled).toBe(false);
+    expect(result.structured.betaTools).toEqual([]);
+    expect(result.text).toContain('Beta tools: not registered');
+    expect(result.text).toContain('DEPOT_MCP_ENABLE_BETA');
     expect(result.text).toContain('Acme Engineering');
     expect(result.text).toContain('<- active');
   });
@@ -161,7 +165,7 @@ describe('depot_whoami', () => {
     expect(result.text).toContain('Checks that failed');
   });
 
-  it('flags that the write gate is inert in this version', async () => {
+  it('reports the registered write tools when DEPOT_MCP_ALLOW_WRITES is on', async () => {
     harness = await createHarness({
       routes: {
         [RPC.listOrganizations]: ok(fixture('organizations')),
@@ -173,8 +177,61 @@ describe('depot_whoami', () => {
     const result = await callTool(harness, 'depot_whoami', {});
 
     expect(result.structured.writesEnabled).toBe(true);
+    expect(result.structured.mutatingToolsAvailable).toBe(8);
+    expect(result.structured.mutatingTools).toEqual([
+      'depot_cancel_ci_run',
+      'depot_cancel_ci_job',
+      'depot_retry_ci_failed_jobs',
+      'depot_retry_ci_job',
+      'depot_rerun_ci_workflow',
+      'depot_set_ci_variable',
+      'depot_delete_ci_variable',
+      'depot_create_project',
+    ]);
+    expect(result.text).toContain('Writes: ENABLED');
+    expect(result.text).toContain('8 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.text).toContain('dryRun:true');
+    expect(JSON.stringify(result.structured.warnings)).not.toContain('no effect');
+  });
+
+  it('reports writes as disabled, with no mutating tools, when the gate is off', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.writesEnabled).toBe(false);
     expect(result.structured.mutatingToolsAvailable).toBe(0);
-    expect(JSON.stringify(result.structured.warnings)).toContain('no effect');
+    expect(result.structured.mutatingTools).toEqual([]);
+    expect(result.text).toContain('Writes: disabled');
+    expect(result.text).not.toContain('depot_cancel_ci_run');
+  });
+
+  it('names the beta tools when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({
+      routes: {
+        [RPC.listOrganizations]: ok(fixture('organizations')),
+        [RPC.listProjects]: ok(fixture('projects')),
+      },
+      config: { enableBeta: true },
+    });
+
+    const result = await callTool(harness, 'depot_whoami', {});
+
+    expect(result.structured.betaEnabled).toBe(true);
+    expect(result.structured.betaTools).toEqual([
+      'depot_list_sandboxes',
+      'depot_get_sandbox',
+      'depot_list_registry_repositories',
+      'depot_get_registry_image',
+    ]);
+    expect(result.text).toContain('Beta tools: enabled by DEPOT_MCP_ENABLE_BETA');
+    expect(result.text).toContain('may change without notice');
+    expect(result.structured.warnings).toEqual([]);
   });
 
   it('explains a token that authenticates but sees nothing', async () => {

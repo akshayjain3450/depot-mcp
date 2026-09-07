@@ -1,15 +1,17 @@
 # Tool roadmap
 
-What depot-mcp exposes today, what Depot's API would allow, and which of it should become a tool. Compiled 2026-09-06 from `research/depot-api-surface.md`, Depot's published protos and CLI reference, and the live verification in this repository's changelog. Risk tiers are the project's own judgement, not Depot's.
+What depot-mcp exposes, what Depot's API would allow, and which of it should become a tool. First compiled 2026-09-06 from `research/depot-api-surface.md`, Depot's published protos and CLI reference, and the live verification recorded in the changelog; updated as tools ship.
 
 Two constraints shape every decision here:
 
 - **Depot has no read-only token.** Any token that can list runs can also cancel them and delete projects. The tool list is the only safety boundary, so every write is opt-in and every irreversible operation is excluded outright.
-- **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The roadmap ends at 42, with the gated ones invisible unless enabled.
+- **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The always-on surface therefore stays under thirty, with the gated tools invisible unless enabled.
 
-## Today: 16 tools, 2 prompts
+## Today
 
-All read-only, all registered unconditionally.
+28 always-on read-only tools, 4 read-only beta tools behind `DEPOT_MCP_ENABLE_BETA`, 8 write tools behind `DEPOT_MCP_ALLOW_WRITES`, 7 prompts, 4 resources. Everything below is on `main` unless marked otherwise; the 0.1.1 release carries only the first 16 tools and 2 prompts.
+
+### Always on
 
 | Group | Tool | Depot RPCs |
 | --- | --- | --- |
@@ -17,67 +19,79 @@ All read-only, all registered unconditionally.
 | CI diagnosis | `depot_diagnose_ci_failure` | `GetFailureDiagnosis` |
 | CI | `depot_list_ci_runs` | `ListRuns` |
 | CI | `depot_get_ci_run` | `GetRun`, `GetRunStatus` |
+| CI | `depot_get_ci_job` | `GetJob` |
+| CI | `depot_get_ci_attempt` | `GetAttempt` |
+| CI | `depot_list_ci_workflows` | `ListWorkflows` |
+| CI | `depot_get_ci_workflow` | `GetWorkflow` |
+| CI | `depot_wait_for_ci_run` | `GetRunStatus`, polled at a bounded interval up to a bounded timeout |
 | CI | `depot_get_ci_logs` | `GetJobAttemptLogs` (plus `GetRunStatus` to resolve ids) |
 | CI | `depot_get_ci_job_summary` | `GetJobSummary` |
 | CI | `depot_get_ci_metrics` | `GetRunMetrics`, `GetJobMetrics`, `GetJobAttemptMetrics` |
 | CI | `depot_list_ci_artifacts` | `ListArtifacts`, `GetArtifactDownloadURL` on request |
+| CI | `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` |
+| CI | `depot_compare_ci_runs` | `GetRun`, `GetRunStatus`, `GetRunMetrics`, `GetFailureDiagnosis` per failed side |
 | Builds | `depot_diagnose_build` | `GetBuild`, `GetBuildSteps`, `GetBuildStepLogs` (binary encoding) |
+| Builds | `depot_get_build` | `GetBuild` |
 | Builds | `depot_list_builds` | `ListBuilds` |
 | Projects | `depot_list_projects` | `ListProjects` |
 | Projects | `depot_get_project` | `GetProject`, `ListTrustPolicies` |
+| Projects | `depot_audit_trust_policies` | `ListProjects`, `ListTrustPolicies` |
+| Projects | `depot_list_project_tokens` | `ListTokens` (metadata only, output allowlisted) |
 | Usage | `depot_get_usage` | `GetUsage`, `GetProjectUsage` |
+| Usage | `depot_list_project_usage` | `ListProjectUsage`, `ListProjects` for names |
+| Usage | `depot_get_cache_summary` | `GetProject`, `ListProjectUsage`, `ListBuilds`, `GetUsage` |
 | Registry | `depot_list_images` | `ListImages` |
 | CI config | `depot_list_ci_secrets` | `ListSecrets` (names and scoping only) |
 | CI config | `depot_list_ci_variables` | `ListVariables` (values redacted when credential-shaped) |
 
-Prompts: `diagnose-latest-failure` and `explain-build-slowness`.
+### Beta, behind `DEPOT_MCP_ENABLE_BETA`
 
-## 0.2: read additions
+Read-only, verified live 2026-09-06 with an Organization token (empty lists on the trial organization; `not_found` for unknown ids). Gated because the APIs are private beta or published only as protos, and because the user-token column is untested.
 
-Twelve always-on tools, ordered by value.
-
-| Tool | Depot RPCs | What it answers |
+| Group | Tool | Depot RPCs |
 | --- | --- | --- |
-| `depot_get_ci_job` | `GetJob` | One job with its dependency jobs and every attempt. The gap between the run tree and the logs. |
-| `depot_get_ci_attempt` | `GetAttempt` | One attempt's status, timing, and sandbox identifiers. |
-| `depot_list_ci_workflows` | `ListWorkflows` | Workflow runs filtered by name, repo, status, trigger, sha, or PR, with job counts. Defaults to every status, since Depot returns nothing without a status filter. |
-| `depot_get_ci_workflow` | `GetWorkflow` | Execution history including rerun and retry lineage. Prerequisite for the 0.3 rerun previews. |
-| `depot_wait_for_ci_run` | `GetRunStatus`, polled | Waits up to a bounded timeout for a run to finish, reporting which nodes changed. Polls the unary RPC only; never the streaming ones. |
-| `depot_get_ci_artifact_url` | `GetArtifactDownloadURL` | A short-lived signed download URL for one artifact, never logged. |
-| `depot_list_project_usage` | `ListProjectUsage` | Every project's build count, build seconds, and layer cache size in one call. Organization token only. |
-| `depot_get_cache_summary` | `GetProject`, `ListProjectUsage`, `ListBuilds`, `GetUsage` | Cache policy versus current cache size, hit ratio over recent builds, minutes saved. Entry-level listing is impossible; the tool says so. |
-| `depot_compare_ci_runs` | `GetRunStatus`, `GetRunMetrics`, `GetFailureDiagnosis` | Job status, duration, and peak memory deltas between two runs, plus failures new in one of them. Ship as a prompt first. |
-| `depot_get_build` | `GetBuild` | One build's status, timing, and cache counters. The build-side wait primitive. |
-| `depot_list_project_tokens` | `ListTokens` | Credential inventory: id, description, created. Must be verified live to return no secret material before shipping. |
-| `depot_audit_trust_policies` | `ListProjects`, `ListTrustPolicies` | Which external CI identities can build into which project, organization-wide. |
+| Sandboxes | `depot_list_sandboxes` | `depot.sandbox.v1.SandboxService/ListSandboxes` |
+| Sandboxes | `depot_get_sandbox` | `depot.sandbox.v1.SandboxService/GetSandbox` |
+| Registry | `depot_list_registry_repositories` | `depot.registry.v1beta1.RegistryService/ListRepositories`, `GetRetentionPolicy` |
+| Registry | `depot_get_registry_image` | `depot.registry.v1beta1.RegistryService/GetImageDetail` (manifest decoded and summarised) |
 
-Five more behind a beta flag until verified live with both token kinds, because their APIs are private beta or documented only in protos: `depot_list_sandboxes`, `depot_get_sandbox` (`depot.sandbox.v1`), `depot_list_registry_repositories`, `depot_get_registry_image` (`depot.registry.v1beta1`), and `depot_list_test_results` (only reachable by shelling out to `depot tests --output json`, so it also needs the CLI).
+Probed and accepted but not exposed: `RegistryService/ListImages` (needs a `repository`; `depot_list_images` already covers the project view) and `RegistryService/ListTokens`.
 
-Deliberately not added: standalone secret and variable getters (the list tools with filters already answer the question), organization details (no RPC beyond `ListOrganizations`, which Organization tokens cannot call), and the log streaming RPCs (Depot caps concurrent streams per organization, so a careless tool could starve real CI).
+### Writes, behind `DEPOT_MCP_ALLOW_WRITES`
 
-## 0.3: first write tools
-
-Nine tools, registered only when `DEPOT_MCP_ALLOW_WRITES=1`, so a client without the flag never sees them. The registration gate already exists in `src/tools/index.ts`.
-
-Every write tool follows one pattern:
-
-- `dryRun` defaults to **true**. A dry run reads the current state with the matching read RPC and returns a preview plus the exact arguments to resend with `dryRun: false`. Where the client supports elicitation, ask for confirmation there instead.
-- Preconditions are checked server-side first, so the model gets a reason rather than Depot's `412`.
-- One audit line to stderr per applied write.
-- Annotations: `readOnlyHint: false`; `destructiveHint` true only for cancel and delete; `idempotentHint` false for anything that creates a new attempt or run.
-- Never accept inline workflow content, secret values, or token descriptions.
+Every write tool defaults to `dryRun: true`, previews from Depot's read RPCs, refuses unsafe preconditions before any mutating RPC, and logs one audit line to stderr per applied write. All dry-run paths are verified live; **no mutating RPC has been called against Depot yet.**
 
 | Tool | Depot RPC | Refuses |
 | --- | --- | --- |
-| `depot_cancel_ci_run` | `CancelRun` (or `CancelWorkflow`) | a run that is already terminal |
-| `depot_cancel_ci_job` | `CancelJob` | a terminal job, or one not in the named run |
-| `depot_retry_ci_failed_jobs` | `RetryFailedJobs` | a workflow still running; zero failed jobs; any job already at three attempts unless forced; an ambiguous run with several workflows |
+| `depot_cancel_ci_run` | `CancelRun`, or `CancelWorkflow` with `workflowId` | terminal targets; a workflow outside the named run |
+| `depot_cancel_ci_job` | `CancelJob` | a terminal job; a job outside the named run |
+| `depot_retry_ci_failed_jobs` | `RetryFailedJobs` | a running workflow; zero failed jobs; an ambiguous run; any job at 3 or more attempts unless forced |
 | `depot_retry_ci_job` | `RetryJob` | a job that did not fail; the same attempt cap |
-| `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, pointing at the retry tool instead |
-| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | a workflow path with a slash (basename only), an empty ref, a malformed repo, oversized inputs, and optionally anything outside an allowlist. Its description says plainly that this can deploy to production if the workflow does. |
-| `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value (the redaction rules decide), a name that collides with a secret |
-| `depot_delete_ci_variable` | `DeleteVariableVariant` | a whole-variable delete unless asked for; a selector matching zero or many variants |
-| `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region. Organization token only. |
+| `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, unless allowed |
+| `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value; a name that belongs to a secret |
+| `depot_delete_ci_variable` | `DeleteVariableVariant`, `DeleteVariable` | a selector matching zero or many variants; a whole-variable delete unless asked |
+| `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region |
+
+Two copies of the write helper exist (`src/lib/write.ts` for the CI writes, `src/lib/write-config.ts` for the variable and project writes); they were built in parallel from the same specification and should be unified in a follow-up.
+
+### Prompts and resources
+
+Prompts: `diagnose-latest-failure`, `explain-build-slowness`, `triage-failures-today`, `compare-ci-runs`, `cache-audit`, `debug-missing-secret`, `watch-run`. Resources, as templates without subscriptions: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, `depot://projects`.
+
+## Not yet built
+
+| Tool | Depot RPCs | Why it is still pending |
+| --- | --- | --- |
+| `depot_list_test_results` | none public; `depot tests --output json` via the CLI | Only reachable by shelling out to the `depot` binary, which this server does not require. Needs a `DEPOT_MCP_USE_CLI` opt-in. |
+| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | A write that can deploy to production if the workflow does; wants an allowlist design and a live verification plan before it exists. |
+
+Deliberately not added: standalone secret and variable getters (the list tools with filters already answer the question), organization details (no RPC beyond `ListOrganizations`, which Organization tokens cannot call), and the log streaming RPCs (Depot caps concurrent streams per organization, so a careless tool could starve real CI).
+
+## Verification still owed
+
+- The apply path of every write tool, against a throwaway run in a trial organization, with explicit approval.
+- Beta tools with a user token.
+- `GetJob` carries no dependency-job list despite the API survey; if Depot adds one, `depot_get_ci_job` should surface it.
 
 ## Permanently excluded
 
@@ -96,20 +110,14 @@ Every write tool follows one pattern:
 | Sandbox creation and command or file execution | Arbitrary code execution and billable compute in a different product. |
 | Internal, unversioned services (`depot.cli.v1`, `agent.v1`, `cache.v1`, `testresults.v1`, `ci.v2`) | Will break without notice. |
 
-## Prompts and resources
-
-Resources, as templates without subscriptions: `depot://ci/run/{runId}` (the run tree), `depot://ci/runs/failed` (last 20 failed runs), `depot://project/{projectId}/builds`, and `depot://projects`.
-
-Prompts: `triage-failures-today` (group the day's failures by fingerprint, diagnose the distinct ones, mark recurring versus new), `compare-ci-runs`, `cache-audit`, `debug-missing-secret` (which variant would match a repo, branch, and workflow, and why the job did not see it), and `watch-run` (wait, then diagnose or list artifacts).
-
 ## Counts
 
 | | Tools | Prompts | Resources |
 | --- | --- | --- | --- |
-| Today (0.1) | 16 | 2 | 0 |
-| 0.2 reads, always on | +12 | +5 | +4 |
-| 0.2 reads, beta-gated | +5 | | |
-| 0.3 writes, flag-gated | +9 | | |
-| End of roadmap | 42 | 7 | 4 |
+| 0.1.1 (released) | 16 | 2 | 0 |
+| `main` today, always on | 28 | 7 | 4 |
+| behind `DEPOT_MCP_ENABLE_BETA` | +4 | | |
+| behind `DEPOT_MCP_ALLOW_WRITES` | +8 | | |
+| Still pending | +2 | | |
 
-For scale, the one known third-party codebase with Depot tools ships 46, of which 15 are writes this project excludes permanently. This roadmap reaches a comparable read surface, plus sandbox and registry reads it lacks, with none of the credential or deletion operations.
+For scale, the one known third-party codebase with Depot tools ships 46, of which 15 are writes this project excludes permanently. This surface is comparable on reads, adds sandbox and registry reads it lacks, and contains none of the credential or deletion operations.

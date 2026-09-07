@@ -27,7 +27,8 @@ export interface StubReply {
   readonly raw?: string;
 }
 
-export type StubRoute = StubReply | readonly StubReply[];
+/** A function route answers per request body, for RPCs a tool calls once per side or target. */
+export type StubRoute = StubReply | readonly StubReply[] | ((body: JsonObject) => StubReply);
 
 /** Keyed by `<fully.qualified.Service>/<Method>`. */
 export type StubRoutes = Record<string, StubRoute>;
@@ -51,9 +52,17 @@ export const NOT_FOUND = connectError(404, 'not_found', 'no such record');
 export interface Harness {
   readonly client: Client;
   readonly calls: RecordedCall[];
+  /** Every pause the server asked for, in milliseconds. None of them actually waits. */
+  readonly sleeps: number[];
   callsTo(rpc: string): RecordedCall[];
   close(): Promise<void>;
 }
+
+/**
+ * The harness clock starts here and advances only when the server sleeps, so a tool that polls
+ * until a deadline sees time pass without the test waiting for it.
+ */
+export const HARNESS_EPOCH = Date.parse('2026-09-06T12:00:00Z');
 
 export function testConfig(overrides: Partial<DepotMcpConfig> = {}): DepotMcpConfig {
   return {
@@ -62,6 +71,7 @@ export function testConfig(overrides: Partial<DepotMcpConfig> = {}): DepotMcpCon
     orgId: undefined,
     projectId: undefined,
     allowWrites: false,
+    enableBeta: false,
     maxLogPages: DEFAULT_MAX_LOG_PAGES,
     outputCharBudget: DEFAULT_OUTPUT_CHAR_BUDGET,
     ...overrides,
@@ -95,13 +105,13 @@ export function stubFetch(routes: StubRoutes, calls: RecordedCall[]): FetchLike 
         headers[key.toLowerCase()] = value;
       }
     }
-    calls.push({
-      rpc,
-      body: decodedBinary ?? asObject(JSON.parse(rawBody) as unknown) ?? {},
-      headers,
-    });
+    const body = decodedBinary ?? asObject(JSON.parse(rawBody) as unknown) ?? {};
+    calls.push({ rpc, body, headers });
 
     const route = routes[rpc];
+    if (typeof route === 'function') {
+      return Promise.resolve(jsonResponse(route(body)));
+    }
     if (route === undefined) {
       return Promise.resolve(
         jsonResponse(
@@ -129,10 +139,17 @@ export async function createHarness(options: {
   config?: Partial<DepotMcpConfig>;
 }): Promise<Harness> {
   const calls: RecordedCall[] = [];
+  const sleeps: number[] = [];
+  let clock = HARNESS_EPOCH;
   const { server } = createServer({
     config: testConfig(options.config),
     fetch: stubFetch(options.routes, calls),
-    sleep: () => Promise.resolve(),
+    sleep: (ms) => {
+      sleeps.push(ms);
+      clock += ms;
+      return Promise.resolve();
+    },
+    now: () => clock,
   });
 
   const client = new Client({ name: 'depot-mcp-test', version: '0.0.0' });
@@ -142,6 +159,7 @@ export async function createHarness(options: {
   return {
     client,
     calls,
+    sleeps,
     callsTo: (rpc) => calls.filter((call) => call.rpc === rpc),
     close: async () => {
       await client.close();

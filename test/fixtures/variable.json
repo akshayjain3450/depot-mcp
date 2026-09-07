@@ -1,0 +1,41 @@
+{
+  "variable": {
+    "id": "var_2c9e1f",
+    "name": "DEPLOY_ENV",
+    "variants": [
+      {
+        "id": "vv_default_01",
+        "variableId": "var_2c9e1f",
+        "name": "default",
+        "value": "staging",
+        "attributes": [],
+        "lastModified": "2026-08-01T10:00:00Z"
+      },
+      {
+        "id": "vv_prod_02",
+        "variableId": "var_2c9e1f",
+        "name": "production",
+        "value": "production",
+        "description": "Production deploy environment",
+        "attributes": [
+          { "key": "repository", "value": "acme/api" },
+          { "key": "branch", "value": "main" }
+        ],
+        "lastModified": "2026-08-11T15:42:00Z"
+      },
+      {
+        "id": "vv_release_03",
+        "variableId": "var_2c9e1f",
+        "name": "release",
+        "value": "release",
+        "attributes": [
+          { "key": "repository", "value": "acme/api" },
+          { "key": "branch", "value": "release/*" }
+        ],
+        "lastModified": "2026-08-12T09:00:00Z"
+      }
+    ],
+    "variantCount": 3,
+    "lastModified": "2026-08-12T09:00:00Z"
+  }
+}

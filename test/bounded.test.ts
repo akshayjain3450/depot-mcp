@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   callTool,
+  connectError,
   createHarness,
   fixture,
   NOT_FOUND,
@@ -43,6 +44,8 @@ interface GiantCase {
   readonly saysTruncated: RegExp;
   /** Set when the tool is known to write outside the budget; the case is then marked `it.fails`. */
   readonly knownToExceed?: string;
+  /** Tools behind a registration gate need the matching flag in the harness config. */
+  readonly config?: { readonly enableBeta?: boolean };
 }
 
 const TRUNCATED_FOOTER = /output truncated/;
@@ -128,6 +131,117 @@ const GIANT_CASES: readonly GiantCase[] = [
     saysTruncated: TRUNCATED_FOOTER,
   },
   {
+    name: 'depot_get_ci_job',
+    args: { jobId: 'job_giant' },
+    routes: {
+      [RPC.getJob]: ok({
+        ...fixture('job'),
+        jobId: 'job_giant',
+        attempts: many(300, (i) => ({
+          attemptId: `att_${i}`,
+          attempt: i + 1,
+          status: 'failed',
+          conclusion: 'failure',
+          errorMessage: `attempt ${i} ${filler(i)}`,
+          sandboxId: `sbx_${i}`,
+          isCurrent: i === 299,
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_ci_attempt',
+    args: { attemptId: 'att_giant' },
+    routes: {
+      [RPC.getAttempt]: ok({
+        ...fixture('attempt'),
+        jobErrorMessage: 'e'.repeat(6_000),
+        attempt: { attemptId: 'att_giant', attempt: 1, status: 'failed', errorMessage: 'e'.repeat(6_000) },
+      }),
+    },
+    // The error message is capped at MAX_LOG_LINE_CHARS, which is still wider than this budget.
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_ci_workflows',
+    args: {},
+    routes: {
+      [RPC.listWorkflows]: ok({
+        workflows: many(500, (i) => ({
+          workflowId: `wf_${i}`,
+          name: `workflow ${i}`,
+          repo: 'acme/api',
+          status: 'failed',
+          runId: `run_${i}`,
+          createdAt: '2026-09-03T14:02:19Z',
+          jobCounts: { total: 4, failed: 1 },
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_ci_workflow',
+    args: { workflowId: 'wf_giant' },
+    routes: {
+      [RPC.getWorkflow]: ok({
+        ...fixture('workflow'),
+        workflowId: 'wf_giant',
+        executions: many(50, (i) => ({ executionId: `exec_${i}`, execution: i + 1, status: 'failed' })),
+        jobs: many(300, (j) => ({
+          jobId: `job_${j}`,
+          jobKey: `job number ${j}`,
+          status: 'failed',
+          attempts: [{ attemptId: `att_${j}`, attempt: 1, status: 'failed', sandboxId: `sbx_${j}` }],
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_wait_for_ci_run',
+    args: { runId: 'run_giant', timeoutSeconds: 30 },
+    routes: {
+      // Every job flips between the first and last poll, so the change list is what grows.
+      [RPC.getRunStatus]: [
+        ok({
+          runId: 'run_giant',
+          status: 'STATUS_RUNNING',
+          workflows: [
+            {
+              workflowId: 'wf_giant',
+              name: 'CI',
+              status: 'STATUS_RUNNING',
+              jobs: many(300, (j) => ({
+                jobId: `job_${j}`,
+                jobKey: `job number ${j} ${'k'.repeat(40)}`,
+                status: 'STATUS_RUNNING',
+              })),
+            },
+          ],
+        }),
+        ok({
+          runId: 'run_giant',
+          status: 'STATUS_FAILED',
+          workflows: [
+            {
+              workflowId: 'wf_giant',
+              name: 'CI',
+              status: 'STATUS_FAILED',
+              jobs: many(300, (j) => ({
+                jobId: `job_${j}`,
+                jobKey: `job number ${j} ${'k'.repeat(40)}`,
+                status: 'STATUS_FAILED',
+              })),
+            },
+          ],
+        }),
+      ],
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
     name: 'depot_get_ci_logs',
     args: { id: 'att_giant' },
     routes: {
@@ -165,6 +279,65 @@ const GIANT_CASES: readonly GiantCase[] = [
           artifactId: `art_${i}`,
           name: `artifact-${i}-${'n'.repeat(60)}.xml`,
           sizeBytes: 1024 * i,
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // The URL is the payload, so this only proves the budget wrapper still applies; a real signed
+    // URL is around a kilobyte and never reaches it.
+    name: 'depot_get_ci_artifact_url',
+    args: { artifactId: 'art_giant' },
+    routes: {
+      [RPC.getArtifactDownloadUrl]: ok({
+        downloadUrl: `https://signed.example/art_giant?X-Amz-Signature=${'s'.repeat(5_000)}`,
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // GetBuild has no field that grows with the build; the id is the only string Depot controls.
+    name: 'depot_get_build',
+    args: { buildId: 'bld_giant' },
+    routes: {
+      [RPC.getBuild]: ok({
+        build: { buildId: `bld_${'g'.repeat(5_000)}`, status: 'STATUS_SUCCESS', cachedSteps: 1, totalSteps: 2 },
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_compare_ci_runs',
+    args: { runA: 'run_giant_a', runB: 'run_giant_b', maxJobs: 500 },
+    routes: {
+      [RPC.getRun]: ok(fixture('compare-run-a')),
+      [RPC.getRunStatus]: ok({
+        runId: 'run_giant',
+        status: 'failed',
+        workflows: [
+          {
+            workflowId: 'wf_giant',
+            name: 'ci',
+            status: 'failed',
+            jobs: many(300, (j) => ({
+              jobId: `job_${j}`,
+              jobKey: `ci.yml:${filler(j)}`,
+              status: 'failed',
+              attempts: [{ attemptId: `att_${j}`, attempt: 1, status: 'failed' }],
+            })),
+          },
+        ],
+      }),
+      [RPC.getRunMetrics]: connectError(429, 'resource_exhausted', 'too large'),
+      [RPC.getFailureDiagnosis]: ok({
+        state: 'FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES',
+        target: { targetId: 'run_giant', targetType: 1 },
+        failureGroups: many(20, (g) => ({
+          fingerprint: `fp_${g}`,
+          count: 3,
+          errorMessage: `error ${g} ${'e'.repeat(500)}`,
+          representatives: [{ attemptId: `att_${g}`, jobKey: `job ${g}`, attempt: 1 }],
         })),
       }),
     },
@@ -237,6 +410,32 @@ const GIANT_CASES: readonly GiantCase[] = [
     saysTruncated: TRUNCATED_FOOTER,
   },
   {
+    name: 'depot_audit_trust_policies',
+    args: {},
+    routes: {
+      [RPC.listProjects]: ok({
+        projects: many(50, (i) => ({ projectId: `proj_${i}`, name: `project-${i}` })),
+      }),
+      [RPC.listTrustPolicies]: ok({
+        trustPolicies: many(20, (i) => ({
+          trustPolicyId: `tp_${i}`,
+          github: { repositoryOwner: 'acme', repository: `repo-${i}-${'r'.repeat(40)}` },
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_project_tokens',
+    args: { projectId: 'proj_api7f2' },
+    routes: {
+      [RPC.listTokens]: ok({
+        tokens: many(500, (i) => ({ tokenId: `tok_${i}`, description: `token ${filler(i)}` })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
     name: 'depot_get_usage',
     args: {},
     routes: {
@@ -248,6 +447,45 @@ const GIANT_CASES: readonly GiantCase[] = [
           minutesSaved: 20,
         })),
       }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_project_usage',
+    args: {},
+    routes: {
+      [RPC.listProjectUsage]: ok({
+        usage: many(500, (i) => ({
+          projectId: `proj_${i}`,
+          buildCount: i,
+          buildDurationSeconds: 60 * i,
+          layerCacheSizeGb: i,
+        })),
+      }),
+      [RPC.listProjects]: ok({
+        projects: many(500, (i) => ({ projectId: `proj_${i}`, name: `project-${filler(i)}` })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    // The summary is a fixed number of lines, so the only thing Depot can inflate is the text
+    // inside them: a huge project name lands in the first line and every observation.
+    name: 'depot_get_cache_summary',
+    args: { projectId: 'proj_giant' },
+    routes: {
+      [RPC.getProject]: ok({
+        project: {
+          projectId: 'proj_giant',
+          name: `giant ${'n'.repeat(3_000)}`,
+          cachePolicy: { keepDays: 14, keepGb: 50 },
+        },
+      }),
+      [RPC.listProjectUsage]: ok({
+        usage: [{ projectId: 'proj_giant', buildCount: 3, buildDurationSeconds: 90, layerCacheSizeGb: 49 }],
+      }),
+      [RPC.listBuilds]: ok(fixture('builds-list')),
+      [RPC.getUsage]: ok({ containerBuild: [] }),
     },
     saysTruncated: TRUNCATED_FOOTER,
   },
@@ -291,6 +529,78 @@ const GIANT_CASES: readonly GiantCase[] = [
     },
     saysTruncated: TRUNCATED_FOOTER,
   },
+  {
+    name: 'depot_list_sandboxes',
+    args: {},
+    config: { enableBeta: true },
+    routes: {
+      [RPC.listSandboxes]: ok({
+        sandboxes: many(500, (i) => ({
+          sandboxId: `sbx_${i}`,
+          name: `sandbox ${filler(i)}`,
+          status: 'SANDBOX_STATUS_FAILED',
+          createdAt: '2026-09-06T09:12:03Z',
+          runtime: { imageRef: 'ghcr.io/acme/runtime:latest' },
+          errorMessage: filler(i),
+        })),
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_sandbox',
+    args: { sandboxId: 'sbx_giant' },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.getSandbox]: ok({
+        sandbox: {
+          sandboxId: 'sbx_giant',
+          status: 'SANDBOX_STATUS_FAILED',
+          errorMessage: 'e'.repeat(5_000),
+          env: Object.fromEntries(many(400, (i) => [`VAR_${i}_${'n'.repeat(40)}`, 'v'])),
+        },
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_list_registry_repositories',
+    args: { withRetentionPolicy: false },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.listRegistryRepositories]: ok({
+        repositories: many(500, (i) => ({
+          name: `acme/${filler(i)}`,
+          tagCount: i,
+          sizeBytes: 1_000_000,
+          lastPushedAt: '2026-09-06T07:55:12Z',
+        })),
+        page: 1,
+        hasMore: true,
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
+  {
+    name: 'depot_get_registry_image',
+    args: { repository: 'acme/api', tag: 'giant' },
+    config: { enableBeta: true },
+    routes: {
+      [RPC.getRegistryImageDetail]: ok({
+        digest: `sha256:${'a'.repeat(64)}`,
+        tags: many(300, (i) => `tag-${i}-${'t'.repeat(40)}`),
+        manifest: {
+          mediaType: 'application/vnd.oci.image.index.v1+json',
+          manifests: many(300, (i) => ({
+            digest: `sha256:${String(i).padStart(64, '0')}`,
+            size: 1000,
+            platform: { os: 'linux', architecture: `arch${i}` },
+          })),
+        },
+      }),
+    },
+    saysTruncated: TRUNCATED_FOOTER,
+  },
 ];
 
 describe.each(GIANT_CASES)('$name against a response far larger than the budget', (giant) => {
@@ -301,7 +611,10 @@ describe.each(GIANT_CASES)('$name against a response far larger than the budget'
       ? 'keeps the rendered text within the budget and says it was cut'
       : `KNOWN GAP: ${giant.knownToExceed}`,
     async () => {
-      harness = await createHarness({ routes: giant.routes, config: { outputCharBudget: BUDGET } });
+      harness = await createHarness({
+        routes: giant.routes,
+        config: { outputCharBudget: BUDGET, ...giant.config },
+      });
       await harness.client.listTools();
 
       const result = await callTool(harness, giant.name, giant.args);

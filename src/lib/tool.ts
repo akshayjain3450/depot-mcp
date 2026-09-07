@@ -8,6 +8,10 @@ import { formatDepotError, isDepotRequestError } from '../depot/errors.js';
 export interface ToolContext {
   readonly api: DepotApi;
   readonly config: DepotMcpConfig;
+  /** Pause between polls. Injected so the test suite can wait without waiting. */
+  readonly sleep: (ms: number) => Promise<void>;
+  /** Clock, injected alongside `sleep` so a fake sleep can advance a fake clock. */
+  readonly now: () => number;
 }
 
 export interface ToolOutcome<TData> {

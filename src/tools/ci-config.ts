@@ -4,9 +4,10 @@ import { TextBudget } from '../lib/budget.js';
 import { redactValue } from '../lib/redact.js';
 import { defineTool, type ToolContext } from '../lib/tool.js';
 
-const ATTRIBUTE_KEYS = ['repository', 'environment', 'branch', 'workflow'] as const;
+export const ATTRIBUTE_KEYS = ['repository', 'environment', 'branch', 'workflow'] as const;
 
-interface Variant {
+export interface Variant {
+  id: string | undefined;
   name: string | undefined;
   attributes: Record<string, string>;
   lastModified: string | undefined;
@@ -15,7 +16,8 @@ interface Variant {
   redactionReason: string | undefined;
 }
 
-interface NamedEntry {
+export interface NamedEntry {
+  id: string | undefined;
   name: string;
   description: string | undefined;
   variants: Variant[];
@@ -48,38 +50,47 @@ function readAttributes(source: JsonObject): Record<string, string> {
   return attributes;
 }
 
-function parseEntries(
+/**
+ * One named secret or variable with its variants. Depot's generated bindings call the variant's
+ * own name `name` (the CLI's `variantName` spelling is accepted too); a bare entry with no
+ * `variants` list is treated as its own single variant.
+ */
+export function parseEntry(entry: JsonObject, withValues: boolean): NamedEntry {
+  const name = readString(entry, 'name') ?? 'unnamed';
+  const rawVariants = readObjectArray(entry, 'variants');
+  const variants = (rawVariants.length > 0 ? rawVariants : [entry]).map((variant): Variant => {
+    const rawValue = withValues ? readString(variant, 'value') : undefined;
+    const redaction =
+      rawValue === undefined
+        ? { value: undefined, redacted: false, reason: undefined }
+        : redactValue(name, rawValue);
+    return {
+      id: readString(variant, 'id', 'variantId'),
+      name: readString(variant, 'variantName', 'variant', 'name'),
+      attributes: readAttributes(variant),
+      lastModified: readString(variant, 'lastModified', 'updatedAt'),
+      value: redaction.value,
+      redacted: redaction.redacted,
+      redactionReason: redaction.reason,
+    };
+  });
+  return {
+    id: readString(entry, 'id', 'variableId', 'secretId'),
+    name,
+    description: readString(entry, 'description'),
+    variants,
+  };
+}
+
+export function parseEntries(
   response: JsonObject,
   listKey: string,
   withValues: boolean,
 ): NamedEntry[] {
-  return readObjectArray(response, listKey).map((entry) => {
-    const name = readString(entry, 'name') ?? 'unnamed';
-    const rawVariants = readObjectArray(entry, 'variants');
-    const variants = (rawVariants.length > 0 ? rawVariants : [entry]).map((variant): Variant => {
-      const rawValue = withValues ? readString(variant, 'value') : undefined;
-      const redaction =
-        rawValue === undefined
-          ? { value: undefined, redacted: false, reason: undefined }
-          : redactValue(name, rawValue);
-      return {
-        name: readString(variant, 'variantName', 'variant'),
-        attributes: readAttributes(variant),
-        lastModified: readString(variant, 'lastModified', 'updatedAt'),
-        value: redaction.value,
-        redacted: redaction.redacted,
-        redactionReason: redaction.reason,
-      };
-    });
-    return {
-      name,
-      description: readString(entry, 'description'),
-      variants,
-    };
-  });
+  return readObjectArray(response, listKey).map((entry) => parseEntry(entry, withValues));
 }
 
-function describeAttributes(attributes: Record<string, string>): string {
+export function describeAttributes(attributes: Record<string, string>): string {
   const entries = Object.entries(attributes);
   return entries.length === 0
     ? 'applies everywhere'
@@ -134,7 +145,8 @@ const filterSchema = {
   workflow: z.string().optional().describe('Keep variants scoped to this workflow.'),
 };
 
-const variantSchema = z.object({
+export const variantSchema = z.object({
+  id: z.string().optional(),
   name: z.string().optional(),
   attributes: z.record(z.string(), z.string()),
   lastModified: z.string().optional(),
@@ -144,6 +156,7 @@ const variantSchema = z.object({
 });
 
 const entrySchema = z.object({
+  id: z.string().optional(),
   name: z.string(),
   description: z.string().optional(),
   variants: z.array(variantSchema),

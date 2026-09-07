@@ -1,0 +1,82 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_7f3d9c21",
+  "repo": "acme/api",
+  "ref": "refs/heads/main",
+  "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+  "headSha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+  "trigger": "push",
+  "runStatus": "failed",
+  "runCreatedAt": "2026-09-03T14:02:11Z",
+  "runStartedAt": "2026-09-03T14:02:19Z",
+  "runFinishedAt": "2026-09-03T14:09:47Z",
+  "workflowId": "wf_2b8e11",
+  "workflowName": "CI",
+  "workflowStatus": "failed",
+  "workflowCreatedAt": "2026-09-03T14:02:12Z",
+  "workflowStartedAt": "2026-09-03T14:02:13Z",
+  "workflowFinishedAt": "2026-09-03T14:09:45Z",
+  "executions": [
+    {
+      "executionId": "exec_1a7c3e",
+      "execution": 1,
+      "status": "failed",
+      "createdAt": "2026-09-03T14:02:12Z",
+      "startedAt": "2026-09-03T14:02:13Z",
+      "finishedAt": "2026-09-03T14:09:45Z"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "job_1c9f30",
+      "jobKey": "lint",
+      "status": "finished",
+      "startedAt": "2026-09-03T14:02:20Z",
+      "finishedAt": "2026-09-03T14:03:22Z",
+      "attempts": [
+        {
+          "attemptId": "att_11aa01",
+          "attempt": 1,
+          "status": "finished",
+          "sandboxId": "sbx_9e1f2a3b4c",
+          "sessionId": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+          "startedAt": "2026-09-03T14:02:20Z",
+          "finishedAt": "2026-09-03T14:03:22Z"
+        }
+      ]
+    },
+    {
+      "jobId": "job_4d0a77",
+      "jobKey": "test (18)",
+      "status": "failed",
+      "startedAt": "2026-09-03T14:02:20Z",
+      "finishedAt": "2026-09-03T14:09:40Z",
+      "attempts": [
+        {
+          "attemptId": "att_80ab00",
+          "attempt": 1,
+          "status": "failed",
+          "sandboxId": "sbx_0a3e7c11d2",
+          "sessionId": "3f6a1c2e-9b4d-4e8a-a1c0-5d7e8f9a0b1c",
+          "startedAt": "2026-09-03T14:02:20Z",
+          "finishedAt": "2026-09-03T14:05:31Z"
+        },
+        {
+          "attemptId": "att_91bc02",
+          "attempt": 2,
+          "status": "failed",
+          "sandboxId": "sbx_6b9d2e04f7",
+          "sessionId": "8c2d4e6f-1a3b-4c5d-9e7f-0a1b2c3d4e5f",
+          "startedAt": "2026-09-03T14:05:41Z",
+          "finishedAt": "2026-09-03T14:09:40Z"
+        }
+      ]
+    },
+    {
+      "jobId": "job_7e5b21",
+      "jobKey": "deploy",
+      "status": "skipped",
+      "attempts": []
+    }
+  ]
+}

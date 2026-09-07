@@ -335,3 +335,11 @@ describe('time helpers', () => {
     expect(daysAgoRfc3339(0, Date.UTC(2026, 8, 5))).toBe('2026-09-05T00:00:00.000Z');
   });
 });
+
+describe('inferTargetType with ids seen live', () => {
+  it('treats a push-triggered ps_ run id as a run', async () => {
+    const { inferTargetType } = await import('../../src/lib/resolve.js');
+    expect(inferTargetType('ps_st95t8cmg1')).toBe('run');
+    expect(inferTargetType('jlj6ll9tdm')).toBeUndefined();
+  });
+});

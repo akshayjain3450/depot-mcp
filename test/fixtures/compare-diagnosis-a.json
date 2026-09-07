@@ -1,0 +1,55 @@
+{
+  "orgId": "org_1a2b3c",
+  "state": "FAILURE_DIAGNOSIS_STATE_GROUPED_FAILURES",
+  "target": {
+    "targetId": "run_cmp_a",
+    "targetType": "FAILURE_DIAGNOSIS_TARGET_TYPE_RUN",
+    "status": "FAILURE_DIAGNOSIS_RESOURCE_STATUS_FAILED"
+  },
+  "context": {
+    "runId": "run_cmp_a",
+    "repo": "acme/api",
+    "sha": "aaaa1111bbbb2222cccc3333dddd4444eeee5555",
+    "trigger": "push",
+    "runStatus": "FAILURE_DIAGNOSIS_RESOURCE_STATUS_FAILED"
+  },
+  "failureGroups": [
+    {
+      "fingerprint": "test:error:AssertionError: expected 200 to equal 503",
+      "source": "test",
+      "count": 2,
+      "errorMessage": "AssertionError: expected 200 to equal 503",
+      "representatives": [
+        {
+          "runId": "run_cmp_a",
+          "jobId": "job_a_test",
+          "jobKey": "ci.yml:test",
+          "attemptId": "att_a_test_1",
+          "attempt": 1,
+          "attemptConclusion": "FAILURE_DIAGNOSIS_CONCLUSION_FAILURE",
+          "errorMessage": "AssertionError: expected 200 to equal 503"
+        }
+      ]
+    },
+    {
+      "fingerprint": "attempt_error:error:Error: ENOSPC: no space left on device",
+      "source": "attempt_error",
+      "count": 1,
+      "errorMessage": "Error: ENOSPC: no space left on device",
+      "representatives": [
+        {
+          "runId": "run_cmp_a",
+          "jobId": "job_a_test",
+          "jobKey": "ci.yml:test",
+          "attemptId": "att_a_test_1",
+          "attempt": 1,
+          "attemptConclusion": "FAILURE_DIAGNOSIS_CONCLUSION_FAILURE",
+          "errorMessage": "Error: ENOSPC: no space left on device"
+        }
+      ]
+    }
+  ],
+  "representativeAttempts": [],
+  "bounds": { "totalFailureGroupCount": 2, "failureGroupLimit": 20 },
+  "nextCommands": []
+}

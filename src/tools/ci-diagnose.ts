@@ -331,7 +331,8 @@ function renderDiagnosis(diagnosis: Diagnosis, charBudget: number): string {
   return text.render();
 }
 
-async function fetchDiagnosis(
+/** Shared with depot_compare_ci_runs, which diagnoses each failed side of a comparison. */
+export async function fetchDiagnosis(
   context: ToolContext,
   id: string,
   explicit: CiTargetType | undefined,

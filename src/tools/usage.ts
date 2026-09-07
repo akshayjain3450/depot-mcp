@@ -1,24 +1,38 @@
 import { z } from 'zod';
+import { DepotApiError } from '../depot/errors.js';
 import { readNumber, readObjectArray, readString } from '../depot/shape.js';
-import { TextBudget } from '../lib/budget.js';
-import { daysAgoRfc3339, toRfc3339, toRfc3339WindowEnd } from '../lib/time.js';
-import { defineTool, ToolInputError } from '../lib/tool.js';
+import { formatCount, TextBudget } from '../lib/budget.js';
+import { parseProject } from '../lib/project.js';
+import { formatDuration } from '../lib/time.js';
+import { defineTool } from '../lib/tool.js';
+import { parseProjectUsage, resolveUsageWindow } from '../lib/usage.js';
 
 const REPO_LIMIT = 20;
 const JOBS_PER_REPO_LIMIT = 10;
+/** One ListProjects page is enough to name every project a trial or mid-sized organization has. */
+const PROJECT_NAME_PAGE_SIZE = 200;
 
-function parseWindowBoundary(
-  field: 'startAt' | 'endAt',
-  value: string,
-  convert: (value: string) => string,
-): string {
-  try {
-    return convert(value);
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
-    throw new ToolInputError(`${field}: ${reason}`);
-  }
-}
+const windowInputSchema = {
+  days: z
+    .number()
+    .int()
+    .min(1)
+    .max(366)
+    .default(30)
+    .describe('Look back this many days from now. Ignored when startAt and endAt are both given.'),
+  startAt: z
+    .string()
+    .optional()
+    .describe(
+      'Start of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC; a date-only value means midnight at the start of that day. Requires endAt.',
+    ),
+  endAt: z
+    .string()
+    .optional()
+    .describe(
+      'End of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC. A date-only value is inclusive: "2024-01-31" covers all of 31 January. Requires startAt.',
+    ),
+};
 
 const usageRowSchema = z.object({
   label: z.string(),
@@ -38,25 +52,7 @@ This is also the only place Depot exposes managed GitHub Actions runner data thr
 
 Pass projectId to scope to one container build project, which returns build counts, duration and layer cache size instead of the organization-wide breakdown. Defaults to the last 30 days.`,
   inputSchema: {
-    days: z
-      .number()
-      .int()
-      .min(1)
-      .max(366)
-      .default(30)
-      .describe('Look back this many days from now. Ignored when startAt and endAt are both given.'),
-    startAt: z
-      .string()
-      .optional()
-      .describe(
-        'Start of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC; a date-only value means midnight at the start of that day. Requires endAt.',
-      ),
-    endAt: z
-      .string()
-      .optional()
-      .describe(
-        'End of the window, RFC 3339 or YYYY-MM-DD. Dates are UTC. A date-only value is inclusive: "2024-01-31" covers all of 31 January. Requires startAt.',
-      ),
+    ...windowInputSchema,
     projectId: z
       .string()
       .optional()
@@ -102,20 +98,7 @@ Pass projectId to scope to one container build project, which returns build coun
     notes: z.array(z.string()),
   },
   handler: async (input, context) => {
-    if ((input.startAt === undefined) !== (input.endAt === undefined)) {
-      throw new ToolInputError(
-        'Pass both startAt and endAt, or neither (in which case "days" sets the window).',
-      );
-    }
-
-    const startAt =
-      input.startAt === undefined
-        ? daysAgoRfc3339(input.days)
-        : parseWindowBoundary('startAt', input.startAt, toRfc3339);
-    const endAt =
-      input.endAt === undefined
-        ? new Date().toISOString()
-        : parseWindowBoundary('endAt', input.endAt, toRfc3339WindowEnd);
+    const { startAt, endAt } = resolveUsageWindow(input);
 
     const notes: string[] = [];
     const text = new TextBudget(context.config.outputCharBudget);
@@ -126,12 +109,8 @@ Pass projectId to scope to one container build project, which returns build coun
         startAt,
         endAt,
       });
-      const usage = {
-        projectId: readString(response, 'projectId') ?? input.projectId,
-        buildCount: readNumber(response, 'buildCount'),
-        buildDurationSeconds: readNumber(response, 'buildDurationSeconds'),
-        layerCacheSizeGb: readNumber(response, 'layerCacheSizeGb'),
-      };
+      const parsed = parseProjectUsage(response);
+      const usage = { ...parsed, projectId: parsed.projectId ?? input.projectId };
       text.push(
         `Usage for project ${usage.projectId} from ${startAt} to ${endAt}:`,
         `  builds: ${usage.buildCount ?? 'unknown'}`,
@@ -266,3 +245,148 @@ Pass projectId to scope to one container build project, which returns build coun
     };
   },
 });
+
+const projectUsageRowSchema = z.object({
+  projectId: z.string(),
+  name: z.string().optional(),
+  buildCount: z.number().optional(),
+  buildDurationSeconds: z.number().optional(),
+  layerCacheSizeGb: z.number().optional(),
+});
+
+type ProjectUsageRow = z.infer<typeof projectUsageRowSchema>;
+
+/** Largest cache first, then most builds, then id, so two calls over the same data read the same. */
+function compareByCacheSize(a: ProjectUsageRow, b: ProjectUsageRow): number {
+  return (
+    (b.layerCacheSizeGb ?? -1) - (a.layerCacheSizeGb ?? -1) ||
+    (b.buildCount ?? -1) - (a.buildCount ?? -1) ||
+    a.projectId.localeCompare(b.projectId)
+  );
+}
+
+export const listProjectUsageTool = defineTool({
+  name: 'depot_list_project_usage',
+  title: 'List Depot usage per project',
+  description: `List every Depot container build project's build count, total build time, and layer cache size for a period, in one call.
+
+Use this for "which project holds the most cache", "which projects are actually building", and "where is our storage going". Rows are sorted by layer cache size, largest first, and carry the project name when depot_list_projects can supply it. For minutes billed and minutes saved by caching use depot_get_usage; for one project's cache health use depot_get_cache_summary.
+
+Organization token only. Defaults to the last 30 days; Depot pages long lists, so re-call with pageToken when nextPageToken is set.`,
+  inputSchema: {
+    ...windowInputSchema,
+    pageToken: z
+      .string()
+      .optional()
+      .describe('Continue a previous listing: pass the nextPageToken from the last call.'),
+  },
+  outputSchema: {
+    periodStart: z.string(),
+    periodEnd: z.string(),
+    projects: z.array(projectUsageRowSchema),
+    returned: z.number(),
+    totals: z.object({
+      buildCount: z.number(),
+      buildDurationSeconds: z.number(),
+      layerCacheSizeGb: z.number(),
+    }),
+    nextPageToken: z.string().optional(),
+    notes: z.array(z.string()),
+  },
+  handler: async (input, context) => {
+    const { startAt, endAt } = resolveUsageWindow(input);
+    const notes: string[] = [];
+
+    const [usageResponse, names] = await Promise.all([
+      context.api.listProjectUsage({ startAt, endAt, pageToken: input.pageToken }),
+      resolveProjectNames(context.api.listProjects({ pageSize: PROJECT_NAME_PAGE_SIZE }), notes),
+    ]);
+
+    const projects = readObjectArray(usageResponse, 'usage')
+      .map(parseProjectUsage)
+      .map((row): ProjectUsageRow => {
+        const projectId = row.projectId ?? 'unknown project';
+        return {
+          projectId,
+          name: names.get(projectId),
+          buildCount: row.buildCount,
+          buildDurationSeconds: row.buildDurationSeconds,
+          layerCacheSizeGb: row.layerCacheSizeGb,
+        };
+      })
+      .sort(compareByCacheSize);
+    const nextPageToken = readString(usageResponse, 'nextPageToken');
+
+    const totals = {
+      buildCount: projects.reduce((sum, row) => sum + (row.buildCount ?? 0), 0),
+      buildDurationSeconds: projects.reduce((sum, row) => sum + (row.buildDurationSeconds ?? 0), 0),
+      layerCacheSizeGb: projects.reduce((sum, row) => sum + (row.layerCacheSizeGb ?? 0), 0),
+    };
+
+    const text = new TextBudget(context.config.outputCharBudget);
+    text.push(`Per-project usage from ${startAt} to ${endAt}, largest cache first:`);
+    if (projects.length === 0) {
+      text.push(
+        '  Depot reported no project usage in this window.',
+        'Try a longer window with "days", and check depot_whoami if you expected activity: this call needs an Organization token.',
+      );
+    } else {
+      const idWidth = Math.max(...projects.map((row) => row.projectId.length));
+      for (const row of projects) {
+        const label = row.name === undefined ? '' : ` (${row.name})`;
+        text.push(
+          `  ${row.projectId.padEnd(idWidth)}${label}  builds ${row.buildCount ?? '?'}  build time ${row.buildDurationSeconds === undefined ? '?' : formatDuration(row.buildDurationSeconds)}  cache ${row.layerCacheSizeGb ?? '?'} GB`,
+        );
+      }
+      text.push(
+        '',
+        `Total on this page: ${formatCount(totals.buildCount, 'build')}, ${formatDuration(totals.buildDurationSeconds)} of build time, ${totals.layerCacheSizeGb} GB of layer cache.`,
+      );
+    }
+    if (nextPageToken !== undefined) {
+      text.push('', 'More projects exist than were returned; re-call with pageToken set to nextPageToken.');
+    }
+    if (notes.length > 0) {
+      text.push('', ...notes.map((note) => `note: ${note}`));
+    }
+
+    return {
+      summary: text.render(),
+      data: {
+        periodStart: startAt,
+        periodEnd: endAt,
+        projects,
+        returned: projects.length,
+        totals,
+        nextPageToken,
+        notes,
+      },
+    };
+  },
+});
+
+/**
+ * Names are decoration, so a failed ListProjects (a user token, say, which this service refuses)
+ * degrades to ids with a note instead of failing the usage listing.
+ */
+async function resolveProjectNames(
+  listing: Promise<Record<string, unknown>>,
+  notes: string[],
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  try {
+    for (const project of readObjectArray(await listing, 'projects').map(parseProject)) {
+      if (project.projectId !== undefined && project.name !== undefined) {
+        names.set(project.projectId, project.name);
+      }
+    }
+  } catch (error) {
+    if (!(error instanceof DepotApiError)) {
+      throw error;
+    }
+    notes.push(
+      `Project names are missing because ListProjects failed (${error.code}); the ids are still correct.`,
+    );
+  }
+  return names;
+}
