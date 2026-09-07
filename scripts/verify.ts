@@ -661,25 +661,6 @@ function applyGateReason(
 }
 
 /** Any value under a key that names the wanted id kind, anywhere in the response. */
-function findIds(value: unknown, keyPattern: RegExp, found: string[] = []): string[] {
-  const object = asObject(value);
-  if (object === undefined) {
-    if (Array.isArray(value)) {
-      for (const entry of value) {
-        findIds(entry, keyPattern, found);
-      }
-    }
-    return found;
-  }
-  for (const [key, entry] of Object.entries(object)) {
-    if (typeof entry === 'string' && keyPattern.test(key)) {
-      found.push(entry);
-    } else {
-      findIds(entry, keyPattern, found);
-    }
-  }
-  return found;
-}
 
 function waitSeconds(remaining: number, cap: number): number {
   return Math.max(5, Math.min(cap, Math.floor(remaining)));
@@ -762,28 +743,21 @@ async function runApplyScenarios(session: Session, d: Discovery, record: Recorde
       { workflowId: d.workflowId, allowFullRerun: true },
       'apply rerun workflow',
     );
-    const after = readObject(rerun.structured, 'after');
-    const newRunId = findIds(after, /runid/i).find((id) => id !== d.failedRunId);
-    const newWorkflowId = findIds(after, /workflowid/i).find((id) => id !== d.workflowId);
     if (rerun.isError) {
       record('apply cancel rerun', { kind: 'skipped', note: 'rerun was not applied' });
-    } else if (newRunId === undefined && newWorkflowId === undefined) {
-      record('apply cancel rerun', {
-        kind: 'skipped',
-        note: 'rerun response carried no new run or workflow id; cancel it in the dashboard',
-      });
     } else {
-      const target = newRunId === undefined ? { workflowId: newWorkflowId } : { runId: newRunId };
-      await apply('depot_cancel_ci_run', target, 'apply cancel rerun');
-      const waitRun = newRunId ?? d.failedRunId;
+      // RerunWorkflow answers {workflowId, jobCount}: the same workflow is reset and runs again,
+      // no new run is created (Depot's bindings, verified live 2026-09-07). Cancel that workflow.
+      await apply('depot_cancel_ci_run', { workflowId: d.workflowId }, 'apply cancel rerun');
+      const waitRun = d.failedRunId;
       if (waitRun === undefined) {
         record('apply wait after cancel', { kind: 'skipped', note: 'no run id to wait on' });
       } else {
         const waited = await wait(waitRun, 120, 'apply wait after cancel');
         const status = readString(waited.structured, 'status') ?? '';
         record('apply confirm cancelled', {
-          kind: /cancel/i.test(status) ? 'ok' : 'error',
-          note: `run ${waitRun} ended ${status || 'unknown'}`,
+          kind: /cancel|fail/i.test(status) ? 'ok' : 'error',
+          note: `run ${waitRun} ended ${status || 'unknown'} (cancelled, or failed first if the deliberately failing job beat the cancel)`,
         });
       }
     }

@@ -230,7 +230,7 @@ describe('depot_cancel_ci_job', () => {
     const applied = await callTool(h, 'depot_cancel_ci_job', { jobId: 'job_4d0a77', dryRun: false });
 
     expect(applied.isError, applied.text).toBe(false);
-    expect(h.callsTo(RPC.cancelJob)[0]?.body).toEqual({ jobId: 'job_4d0a77' });
+    expect(h.callsTo(RPC.cancelJob)[0]?.body).toEqual({ workflowId: 'wf_2b8e11', jobId: 'job_4d0a77' });
     expect(applied.structured.after).toMatchObject({ rpc: 'CancelJob', ids: { jobId: 'job_4d0a77' } });
   });
 
@@ -443,7 +443,7 @@ describe('depot_retry_ci_job', () => {
     const applied = await callTool(h, 'depot_retry_ci_job', { jobId: 'job_4d0a77', dryRun: false });
 
     expect(applied.isError, applied.text).toBe(false);
-    expect(h.callsTo(RPC.retryJob)[0]?.body).toEqual({ jobId: 'job_4d0a77' });
+    expect(h.callsTo(RPC.retryJob)[0]?.body).toEqual({ workflowId: 'wf_2b8e11', jobId: 'job_4d0a77' });
     expect(applied.structured.after).toMatchObject({ rpc: 'RetryJob', ids: { attemptId: 'att_3' } });
     expect(auditLines(spy)[0]).toContain('depot_retry_ci_job jobId=job_4d0a77');
   });

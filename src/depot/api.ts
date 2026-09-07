@@ -302,12 +302,14 @@ export class DepotApi {
     return this.client.call(rpc(CI, 'CancelWorkflow'), { workflowId });
   }
 
-  cancelJob(jobId: string): Promise<JsonObject> {
-    return this.client.call(rpc(CI, 'CancelJob'), { jobId });
+  /** CancelJobRequest is {workflowId, jobId}: verified against Depot's generated bindings and live on 2026-09-07. */
+  cancelJob(jobId: string, workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'CancelJob'), { workflowId, jobId });
   }
 
-  retryJob(jobId: string): Promise<JsonObject> {
-    return this.client.call(rpc(CI, 'RetryJob'), { jobId });
+  /** RetryJobRequest is {workflowId, jobId}; without the workflow Depot answers 400 "Workflow not found" (live, 2026-09-07). */
+  retryJob(jobId: string, workflowId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CI, 'RetryJob'), { workflowId, jobId });
   }
 
   retryFailedJobs(workflowId: string): Promise<JsonObject> {
