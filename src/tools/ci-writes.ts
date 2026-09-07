@@ -392,8 +392,8 @@ Refuses a job that is already finished, failed, cancelled, or skipped, and a job
     }
     return refuseRunMismatch(input.runId, preview.runId, `Job ${preview.label}`);
   },
-  apply: async (input, context) =>
-    afterFromResponse('CancelJob', await context.api.cancelJob(input.jobId)),
+  apply: async (input, context, preview) =>
+    afterFromResponse('CancelJob', await context.api.cancelJob(input.jobId, preview.workflowId ?? '')),
 });
 
 export const retryCiFailedJobsTool = defineWriteTool({
@@ -506,8 +506,8 @@ Refuses a job that did not fail or get cancelled (nothing to retry, or still run
     }
     return refuseAttemptCap([{ label: preview.label, state: preview.state, attemptCount: preview.attemptCount }], input.force);
   },
-  apply: async (input, context) =>
-    afterFromResponse('RetryJob', await context.api.retryJob(input.jobId)),
+  apply: async (input, context, preview) =>
+    afterFromResponse('RetryJob', await context.api.retryJob(input.jobId, preview.workflowId ?? '')),
 });
 
 export const rerunCiWorkflowTool = defineWriteTool({
