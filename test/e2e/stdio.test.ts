@@ -208,8 +208,9 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     }
     expect(spawned.stdout()).not.toContain('dummy-token-e2e');
     expect(spawned.stderr()).not.toContain('dummy-token-e2e');
-    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 0 mutating tool(s), 0 of them destructive');
     expect(spawned.stderr()).not.toContain('DEPOT_MCP_ENABLE_BETA is set');
+    expect(spawned.stderr()).not.toContain('DEPOT_MCP_ALLOW_DESTRUCTIVE');
   });
 
   it('answers tools/list with 32 tools and names the beta ones on stderr when DEPOT_MCP_ENABLE_BETA is set', async () => {
@@ -227,7 +228,7 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     spawned.child.stdin?.end();
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
     expect(exit.code).toBe(0);
-    expect(spawned.stderr()).toContain('28 read-only tool(s), 4 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 4 beta tool(s), 0 mutating tool(s), 0 of them destructive');
     expect(spawned.stderr()).toContain('DEPOT_MCP_ENABLE_BETA is set: depot_list_sandboxes');
     expect(spawned.stderr()).not.toContain('dummy-token-e2e');
   });
@@ -240,10 +241,47 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
 
     expect(exit.code).toBe(0);
-    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 8 mutating tool(s)');
-    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 8 mutating tool(s) registered');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 10 mutating tool(s), 0 of them destructive');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 10 mutating tool(s) registered');
     expect(spawned.stderr()).toContain('depot_cancel_ci_run');
     expect(spawned.stderr()).toContain('dryRun:true');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_DESTRUCTIVE is not set: no destructive tool (depot_delete_project) is registered');
     expect(spawned.stderr()).not.toContain('dummy');
+  });
+
+  it('announces the destructive tool on stderr only when both write flags are set', async () => {
+    const spawned = spawnServer([], {
+      DEPOT_TOKEN: 'dummy',
+      DEPOT_MCP_ALLOW_WRITES: '1',
+      DEPOT_MCP_ALLOW_DESTRUCTIVE: '1',
+    });
+    await initialize(spawned);
+
+    const reply = nextStdoutLine(spawned, 'tools/list response');
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
+    const list = JSON.parse(await reply) as { result?: { tools?: Array<{ name: string }> } };
+
+    expect(list.result?.tools).toHaveLength(39);
+    expect(list.result?.tools?.map((tool) => tool.name)).toContain('depot_delete_project');
+
+    spawned.child.stdin?.end();
+    const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
+    expect(exit.code).toBe(0);
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 11 mutating tool(s), 1 of them destructive');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_DESTRUCTIVE is set: depot_delete_project registered');
+    expect(spawned.stderr()).not.toContain('dummy');
+  });
+
+  it('ignores DEPOT_MCP_ALLOW_DESTRUCTIVE without DEPOT_MCP_ALLOW_WRITES', async () => {
+    const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy', DEPOT_MCP_ALLOW_DESTRUCTIVE: '1' });
+    await initialize(spawned);
+
+    spawned.child.stdin?.end();
+    const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
+
+    expect(exit.code).toBe(0);
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 0 mutating tool(s), 0 of them destructive');
+    expect(spawned.stderr()).not.toContain('depot_delete_project');
   });
 });

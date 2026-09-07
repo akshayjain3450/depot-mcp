@@ -5,7 +5,12 @@ import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
 import { betaTools } from './beta.js';
-import { mutatingTools } from './writes.js';
+import {
+  betaMutatingTools,
+  mutatingTools,
+  destructiveTools,
+  destructiveWritesEnabled,
+} from './writes.js';
 
 const PROJECT_PREVIEW_LIMIT = 25;
 
@@ -43,8 +48,7 @@ export const whoamiTool = defineTool({
 
 Call this first whenever another Depot tool returns an empty list or a permission error. Depot's most common confusing failure is a token that spans several organizations with none selected: requests then resolve against the wrong organization and return empty results rather than an error. This tool says plainly whether that is happening and what to set.
 
-Also reports whether write tools are enabled (this version of the server ships no mutating tools at all, so the answer is always that nothing can be modified) and whether the beta sandbox and registry tools are registered (DEPOT_MCP_ENABLE_BETA).
-Also reports whether write tools are enabled (DEPOT_MCP_ALLOW_WRITES) and which mutating tools are registered. With the flag unset none are, and nothing here can retry, cancel, rerun, or delete anything.
+Also reports whether write tools are enabled (DEPOT_MCP_ALLOW_WRITES) and which mutating tools are registered, whether the destructive gate is open (DEPOT_MCP_ALLOW_DESTRUCTIVE, which adds depot_delete_project only when writes are on too), and whether the beta sandbox and registry tools are registered (DEPOT_MCP_ENABLE_BETA). With the write flag unset no mutating tool exists, and nothing here can retry, cancel, rerun, or delete anything.
 
 Never returns the token or any part of it.`,
   inputSchema: {},
@@ -58,10 +62,14 @@ Never returns the token or any part of it.`,
     projectCount: z.number().optional(),
     projects: z.array(z.object({ projectId: z.string().optional(), name: z.string().optional() })),
     writesEnabled: z.boolean(),
+    /** True only when DEPOT_MCP_ALLOW_WRITES and DEPOT_MCP_ALLOW_DESTRUCTIVE are both set. */
+    destructiveEnabled: z.boolean(),
     betaEnabled: z.boolean(),
     betaTools: z.array(z.string()),
+    /** Every registered write, destructive ones included. */
     mutatingToolsAvailable: z.number(),
     mutatingTools: z.array(z.string()),
+    destructiveTools: z.array(z.string()),
     warnings: z.array(z.string()),
     failures: z.array(z.object({ check: z.string(), detail: z.string() })),
   },
@@ -160,9 +168,27 @@ Never returns the token or any part of it.`,
         'The token authenticated but sees no organizations. That is typical of a project token, which cannot reach the Depot CI API or the Depot API — use an Organization token instead.',
       );
     }
-    const registeredWrites = context.config.allowWrites
-      ? mutatingTools.map((tool) => tool.name)
+    const destructiveEnabled = destructiveWritesEnabled(context.config);
+    const registeredDestructive = destructiveEnabled
+      ? destructiveTools.map((tool) => tool.name)
       : [];
+    const registeredWrites = context.config.allowWrites
+      ? [
+          ...mutatingTools.map((tool) => tool.name),
+          ...(context.config.enableBeta ? betaMutatingTools.map((tool) => tool.name) : []),
+          ...registeredDestructive,
+        ]
+      : [];
+    if (context.config.allowDestructive && !context.config.allowWrites) {
+      warnings.push(
+        'DEPOT_MCP_ALLOW_DESTRUCTIVE is set but DEPOT_MCP_ALLOW_WRITES is not, so it has no effect: the destructive tools are registered only when both are set.',
+      );
+    }
+    const destructiveLine = !context.config.allowWrites
+      ? 'Destructive writes: disabled. DEPOT_MCP_ALLOW_DESTRUCTIVE only counts once DEPOT_MCP_ALLOW_WRITES is set, so nothing here can delete a project.'
+      : destructiveEnabled
+        ? `Destructive writes: ENABLED by DEPOT_MCP_ALLOW_DESTRUCTIVE. ${registeredDestructive.join(', ')} can destroy things that cannot be restored; each needs a confirmation argument naming the target, and a dryRun:false call after the user has confirmed.`
+        : `Destructive writes: disabled. DEPOT_MCP_ALLOW_DESTRUCTIVE is not set, so ${destructiveTools.map((tool) => tool.name).join(', ')} is not registered and nothing here can delete a project.`;
 
     const text = new TextBudget(context.config.outputCharBudget);
     const kindLabel =
@@ -204,13 +230,13 @@ Never returns the token or any part of it.`,
 
     text.push(
       '',
-      'Writes: this server version registers no mutating tools, so nothing here can retry, cancel, rerun, or delete anything.',
       context.config.enableBeta
         ? `Beta tools: enabled by DEPOT_MCP_ENABLE_BETA (${betaTools.map((tool) => tool.name).join(', ')}). They are read-only but built on Depot APIs that may change without notice.`
         : 'Beta tools: not registered. Set DEPOT_MCP_ENABLE_BETA=1 to add the read-only sandbox and registry tools built on Depot\'s beta APIs.',
       registeredWrites.length > 0
         ? `Writes: ENABLED by DEPOT_MCP_ALLOW_WRITES. ${registeredWrites.length} mutating tool(s) registered: ${registeredWrites.join(', ')}. Each defaults to dryRun:true and changes nothing until called again with dryRun:false after the user confirms the preview.`
         : 'Writes: disabled. DEPOT_MCP_ALLOW_WRITES is not set, so no mutating tool is registered and nothing here can retry, cancel, rerun, or delete anything.',
+      destructiveLine,
     );
 
     if (warnings.length > 0) {
@@ -240,10 +266,12 @@ Never returns the token or any part of it.`,
           .slice(0, PROJECT_PREVIEW_LIMIT)
           .map((project) => ({ projectId: project.projectId, name: project.name })),
         writesEnabled: context.config.allowWrites,
+        destructiveEnabled,
         betaEnabled: context.config.enableBeta,
         betaTools: context.config.enableBeta ? betaTools.map((tool) => tool.name) : [],
         mutatingToolsAvailable: registeredWrites.length,
         mutatingTools: registeredWrites,
+        destructiveTools: registeredDestructive,
         warnings,
         failures,
       },

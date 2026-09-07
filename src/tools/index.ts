@@ -19,9 +19,14 @@ import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
 import { getUsageTool, listProjectUsageTool } from './usage.js';
 import { whoamiTool } from './whoami.js';
-import { mutatingTools } from './writes.js';
+import {
+  betaMutatingTools,
+  mutatingTools,
+  destructiveTools,
+  destructiveWritesEnabled,
+} from './writes.js';
 
-export { mutatingTools };
+export { betaMutatingTools, destructiveTools, mutatingTools };
 
 export const readOnlyTools: readonly ToolModule[] = [
   whoamiTool,
@@ -60,8 +65,13 @@ export interface RegistrationSummary {
   readonly readOnly: string[];
   /** Read-only tools over beta Depot APIs; empty unless DEPOT_MCP_ENABLE_BETA is set. */
   readonly beta: string[];
+  /** Every registered write tool, the beta sandbox writes included when both gates are open. */
+  /** Reversible writes plus, when both gates are open, the destructive ones. */
   readonly mutating: string[];
+  /** Irreversible writes; empty unless DEPOT_MCP_ALLOW_WRITES and DEPOT_MCP_ALLOW_DESTRUCTIVE are both set. */
+  readonly destructive: string[];
   readonly writesEnabled: boolean;
+  readonly destructiveEnabled: boolean;
   readonly betaEnabled: boolean;
 }
 
@@ -79,12 +89,31 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
   }
 
   // The gate. With DEPOT_MCP_ALLOW_WRITES unset the write tools are never registered, so a
-  // client cannot list, call, or be talked into calling them.
+  // client cannot list, call, or be talked into calling them. The sandbox writes sit behind
+  // the beta gate as well, since their API is beta.
   const mutating: string[] = [];
   if (context.config.allowWrites) {
     for (const tool of mutatingTools) {
       tool.register(server, context);
       mutating.push(tool.name);
+    }
+    if (context.config.enableBeta) {
+      for (const tool of betaMutatingTools) {
+        tool.register(server, context);
+        mutating.push(tool.name);
+      }
+    }
+  }
+
+  // The second gate. DEPOT_MCP_ALLOW_DESTRUCTIVE on its own registers nothing: an operator who
+  // turns writes off must not find deletion still reachable.
+  const destructive: string[] = [];
+  const destructiveEnabled = destructiveWritesEnabled(context.config);
+  if (destructiveEnabled) {
+    for (const tool of destructiveTools) {
+      tool.register(server, context);
+      mutating.push(tool.name);
+      destructive.push(tool.name);
     }
   }
 
@@ -92,7 +121,9 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
     readOnly: readOnlyTools.map((tool) => tool.name),
     beta,
     mutating,
+    destructive,
     writesEnabled: context.config.allowWrites,
+    destructiveEnabled,
     betaEnabled: context.config.enableBeta,
   };
 }

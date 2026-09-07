@@ -44,6 +44,7 @@ import {
   PROMPT_ARGUMENTS,
   READ_TOOL_ARGUMENTS,
   RESOURCE_TEMPLATE_ARGUMENTS,
+  VERIFY_DISPATCH,
   VERIFY_PROJECT_NAME,
   VERIFY_VARIABLE_NAME,
   WRITE_DRY_RUN_ARGUMENTS,
@@ -167,7 +168,7 @@ interface Gate {
   readonly violations: string[];
 }
 
-const MUTATING_PATH = /Cancel|Retry|Rerun|Set|Delete|Create/;
+const MUTATING_PATH = /Cancel|Retry|Rerun|Dispatch|Set|Delete|Create|Update|Stop|Kill/;
 
 /** The safety net: no request whose path names a mutating RPC leaves the process while closed. */
 function guardedFetch(gate: Gate): FetchLike {
@@ -633,8 +634,10 @@ async function runDryRunScenarios(session: Session, d: Discovery, record: Record
 // Apply phase
 
 /** Upper bound on the CI time the apply phase may spend waiting on runs. */
-const APPLY_BUDGET_SECONDS = 150;
+const APPLY_BUDGET_SECONDS = 240;
 const RETRY_WAIT_SECONDS = 180;
+/** A dispatched lab run boots a sandbox and fails within seconds; the wait is mostly the boot. */
+const DISPATCH_WAIT_SECONDS = 120;
 
 function applyGateReason(
   session: Session,
@@ -763,18 +766,75 @@ async function runApplyScenarios(session: Session, d: Discovery, record: Recorde
     }
   }
 
-  // (d) Create a project and read it back.
+  // (d) Dispatch the lab repository's deliberately failing workflow and wait for the new run.
+  if (d.repo !== undefined && d.repo !== VERIFY_DISPATCH.repo) {
+    record('apply dispatch workflow', {
+      kind: 'skipped',
+      note: `discovery found runs from ${d.repo}, not the lab repository ${VERIFY_DISPATCH.repo}`,
+    });
+  } else if (remaining() < 20) {
+    record('apply dispatch workflow', { kind: 'skipped', note: 'apply time budget exhausted' });
+  } else {
+    const dispatched = await apply('depot_dispatch_ci_workflow', { ...VERIFY_DISPATCH }, 'apply dispatch workflow');
+    const runId = readString(readObject(dispatched.structured, 'after'), 'runId');
+    if (dispatched.isError) {
+      record('apply wait after dispatch', { kind: 'skipped', note: 'dispatch was not applied' });
+    } else if (runId === undefined) {
+      record('apply wait after dispatch', { kind: 'skipped', note: 'dispatch returned no run id' });
+    } else {
+      const waited = await wait(runId, DISPATCH_WAIT_SECONDS, 'apply wait after dispatch');
+      const status = readString(waited.structured, 'status') ?? '';
+      record('apply confirm dispatched run finished', {
+        kind: /fail|finish|cancel/i.test(status) ? 'ok' : 'error',
+        note: `run ${runId} ended ${status || 'unknown'} (the lab workflow fails on purpose)`,
+      });
+    }
+  }
+
+  // (e) Create a project and read it back.
+  // (d) Create a project, read it back, update its cache policy, and delete it again when the
+  // destructive gate is open. Only the throwaway project is ever updated or deleted.
   const projectName = `${VERIFY_PROJECT_NAME}-${d.stamp}`;
   const created = await apply('depot_create_project', { name: projectName }, 'apply create project');
   const projectId = readString(readObject(readObject(created.structured, 'after'), 'project'), 'projectId');
   if (projectId === undefined) {
     record('apply get created project', { kind: 'skipped', note: 'create returned no projectId' });
-  } else {
-    record('apply get created project', classify(await invoke(session, 'depot_get_project', { projectId })));
+    record('apply update project', { kind: 'skipped', note: 'create returned no projectId' });
+    record('apply delete project', { kind: 'skipped', note: 'create returned no projectId' });
+    return;
   }
-  say('');
-  say('*** REMINDER: projects cannot be deleted through this server. ***');
-  say(`*** Remove "${projectName}"${projectId === undefined ? '' : ` (${projectId})`} in the Depot dashboard. ***`);
+  record('apply get created project', classify(await invoke(session, 'depot_get_project', { projectId })));
+  await apply('depot_update_project', { projectId, cacheKeepDays: 7 }, 'apply update project');
+
+  const deleteRegistered = session.tools.some((tool) => tool.name === 'depot_delete_project');
+  if (!deleteRegistered) {
+    record('apply delete project', {
+      kind: 'skipped',
+      note: 'DEPOT_MCP_ALLOW_DESTRUCTIVE is not set, so depot_delete_project is not registered',
+    });
+    say('');
+    say('*** REMINDER: DEPOT_MCP_ALLOW_DESTRUCTIVE was not set, so the project was not deleted. ***');
+    say(`*** Remove "${projectName}" (${projectId}) in the Depot dashboard, or rerun with DEPOT_MCP_ALLOW_DESTRUCTIVE=1. ***`);
+    return;
+  }
+  const deleted = await apply(
+    'depot_delete_project',
+    { projectId, confirmProjectName: projectName },
+    'apply delete project',
+  );
+  const afterDelete = await invoke(session, 'depot_get_project', { projectId });
+  const goneOutcome = classify(afterDelete);
+  record('apply confirm project gone', {
+    ...goneOutcome,
+    note:
+      goneOutcome.kind === 'depot' && goneOutcome.code === 'not_found'
+        ? 'GetProject answers not_found, as a deleted project should'
+        : `expected not_found after delete; ${goneOutcome.note}`,
+  });
+  if (deleted.isError) {
+    say('');
+    say(`*** REMINDER: the delete was refused or failed; remove "${projectName}" (${projectId}) in the Depot dashboard. ***`);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -45,7 +45,7 @@ export function toWireSandboxStatus(state: SandboxState): string {
 const BETA_NOTICE =
   'Beta: this tool is registered only when DEPOT_MCP_ENABLE_BETA is set, because depot.sandbox.v1 is published as a proto without reference documentation and Depot may change it without notice. Field names and states here follow the proto as of 2026-09-06.';
 
-const sandboxSchema = z.object({
+export const sandboxSchema = z.object({
   sandboxId: z.string().optional(),
   name: z.string().optional(),
   organizationId: z.string().optional(),
@@ -161,7 +161,7 @@ Use this to see which sandboxes are running or recently finished, to find a sand
 
 ${BETA_NOTICE}
 
-Read-only: this cannot create, stop, kill, or run commands in a sandbox; those operations are deliberately not exposed by this server. Sandbox environment variables are reported by name only, never by value.`,
+Read-only: this cannot create a sandbox or run commands in one; those operations are deliberately not exposed by this server. Stopping or killing a sandbox is a separate write tool (depot_stop_sandbox, depot_kill_sandbox) that exists only when DEPOT_MCP_ALLOW_WRITES is also set. Sandbox environment variables are reported by name only, never by value.`,
   inputSchema: {
     states: z
       .array(z.enum(SANDBOX_STATES))
@@ -243,7 +243,7 @@ Use this after depot_list_sandboxes to inspect a sandbox that failed or is still
 
 ${BETA_NOTICE}
 
-Read-only: this cannot stop, kill, extend, or run commands in the sandbox. Environment variable values are never returned, only their names.`,
+Read-only: this cannot extend the sandbox or run commands in it. Stopping or killing it is a separate write tool (depot_stop_sandbox, depot_kill_sandbox) that exists only when DEPOT_MCP_ALLOW_WRITES is also set. Environment variable values are never returned, only their names.`,
   inputSchema: {
     sandboxId: z
       .string()

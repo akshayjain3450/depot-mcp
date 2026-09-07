@@ -54,13 +54,22 @@ export interface WriteToolSpec<
     context: ToolContext,
     preview: z.input<z.ZodObject<TPreview>>,
   ) => Promise<WriteApplied<z.input<z.ZodObject<TAfter>>>>;
+  /**
+   * Identifiers for the audit line: names and ids, never values. Defaults to every
+   * string-valued argument, which is right for tools whose arguments are ids; a tool that takes
+   * a value (a variable's contents, a project name) names what it touched from the preview
+   * instead.
+   */
+  readonly auditIds?:
+    | ((input: WriteInput<TInput>, preview: z.input<z.ZodObject<TPreview>>) => string)
+    | undefined;
 }
 
 /**
- * Argument values worth naming in the audit line. Only strings qualify: ids are strings, and
- * the token never appears in tool input.
+ * The default audit identifiers: every string-valued argument. Only strings qualify: ids are
+ * strings, and the token never appears in tool input.
  */
-function auditIds(input: Record<string, unknown>): string {
+export function defaultAuditIds(input: Record<string, unknown>): string {
   const parts = Object.entries(input)
     .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
     .map(([key, value]) => `${key}=${value}`);
@@ -68,8 +77,8 @@ function auditIds(input: Record<string, unknown>): string {
 }
 
 /** One line per applied write, to stderr, so an operator can see what an agent changed. */
-export function writeAuditLine(tool: string, input: Record<string, unknown>, now = new Date()): void {
-  console.error(`[depot-mcp write] ${tool} ${auditIds(input)} ${now.toISOString()}`);
+export function writeAuditLine(tool: string, ids: string, now = new Date()): void {
+  console.error(`[depot-mcp write] ${tool} ${ids} ${now.toISOString()}`);
 }
 
 /**
@@ -179,7 +188,10 @@ export function defineWriteTool<
         }
         throw error;
       }
-      writeAuditLine(spec.name, rest);
+      writeAuditLine(
+        spec.name,
+        spec.auditIds === undefined ? defaultAuditIds(rest) : spec.auditIds(input, preview.data),
+      );
 
       text.push(`APPLIED ${spec.name}.`, 'State read from Depot immediately before applying:');
       text.push(...preview.lines.map((line) => `  ${line}`));
