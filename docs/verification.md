@@ -40,9 +40,9 @@ For each token present the script creates the server in-process with `DEPOT_MCP_
 1. **Discovery.** `depot_whoami`, then projects, builds, runs, the failed run's tree, its artifacts, sandboxes, and registry repositories. Whatever is missing is noted, not fatal; a scenario that needs a missing id records `skipped: no <thing> available`.
 2. **Reads.** Every tool in `tools/list` that is not a write tool, beta tools included. Arguments come from `scripts/verify-scenarios.ts`, which has one builder per tool name. A registered tool without a builder is reported as `MISSING BUILDER` and fails the run, so a new tool cannot avoid verification. Each result's `structuredContent` is validated against the tool's advertised `outputSchema` with the SDK's own validator.
 3. **Prompts and resources.** `prompts/get` for every prompt with sample arguments; `resources/read` for every fixed URI and every template filled with a discovered id.
-4. **Dry runs.** Every write tool with `dryRun` left at its default. The cancels target the failed run and must be refused as terminal; the retries and the rerun preview; the variable and project writes preview or refuse depending on what earlier apply runs left behind.
+4. **Dry runs.** Every write tool with `dryRun` left at its default. The cancels target the failed run and must be refused as terminal; the retries and the rerun preview; the dispatch previews the lab repository's `artifacts.yml` (or is refused when `DEPOT_MCP_DISPATCH_ALLOWLIST` leaves it out); the variable and project writes preview or refuse depending on what earlier apply runs left behind; the sandbox stop and kill are skipped unless discovery found a sandbox.
 
-A fetch wrapper under the server refuses any request whose path names a mutating RPC (`Cancel`, `Retry`, `Rerun`, `Set`, `Delete`, `Create`) while the apply gate is closed, and counts the attempt as a failure. Without `DEPOT_MCP_VERIFY_APPLY=1` the gate never opens, so `npm run verify` cannot change anything in Depot whatever a tool does.
+A fetch wrapper under the server refuses any request whose path names a mutating RPC (`Cancel`, `Retry`, `Rerun`, `Dispatch`, `Set`, `Delete`, `Create`, `Stop`, `Kill`) while the apply gate is closed, and counts the attempt as a failure. Without `DEPOT_MCP_VERIFY_APPLY=1` the gate never opens, so `npm run verify` cannot change anything in Depot whatever a tool does.
 
 ### Reading the matrix
 
@@ -85,14 +85,15 @@ The sequence, each step recorded with the response summary and the stderr audit 
 1. `depot_set_ci_variable` `DEPOT_MCP_VERIFY=ok-<stamp>`, `depot_list_ci_variables` to confirm it exists, `depot_delete_ci_variable` with `allVariants: true`, list again to confirm it is gone.
 2. `depot_retry_ci_job` on the failed job (again with `force: true` if the attempt cap refused it), then `depot_wait_for_ci_run` on its run with a 180-second ceiling. A job that fails on purpose fails again within seconds.
 3. `depot_rerun_ci_workflow` with `allowFullRerun: true` on the failed run's workflow, which returns a new run id; `depot_cancel_ci_run` on that run immediately; `depot_wait_for_ci_run` to confirm it reaches `cancelled`.
-4. `depot_create_project` named `depot-mcp-verify-<yyyymmdd-hhmm>`, then `depot_get_project` on the returned id.
+4. `depot_dispatch_ci_workflow` of `artifacts.yml` on `main` in `akshayjain3450/depot-ci-lab` (the workflow fails on purpose within seconds), then `depot_wait_for_ci_run` on the returned run id with a 120-second ceiling. Skipped when discovery found runs from a different repository, since the dispatch target is fixed. Leave `DEPOT_MCP_DISPATCH_ALLOWLIST` unset in `.env`, or list that repository and file.
+5. `depot_create_project` named `depot-mcp-verify-<yyyymmdd-hhmm>`, then `depot_get_project` on the returned id.
 
-The whole phase is capped at roughly two minutes of waiting; a wait that runs out of budget is recorded as `timed_out`, not as a failure.
+The whole phase is capped at roughly four minutes of waiting; a wait that runs out of budget is recorded as `timed_out`, not as a failure.
 
 ### What it leaves behind
 
 - **The project.** Nothing in this server deletes projects. Open the Depot dashboard, find `depot-mcp-verify-<stamp>`, and delete it from its settings. The script prints a reminder in capitals at the end of the phase.
-- **Two more attempts on the failed job and one cancelled run**, which cost a few CI seconds each and stay in the run history.
+- **Two more attempts on the failed job, one cancelled run, and one dispatched run that failed on purpose**, which cost a few CI seconds each and stay in the run history.
 - Nothing else. The variable is deleted by step 1; if the confirm line says otherwise, remove `DEPOT_MCP_VERIFY` with `depot ci vars remove` or in the dashboard.
 
 Check the `## Audit lines` section of the report: one `[depot-mcp write]` line per applied write, none containing a token.
@@ -114,7 +115,7 @@ claude mcp add -s user depot \
 claude mcp list          # depot should show as connected
 ```
 
-`claude mcp add` stores the token in plain text in Claude Code's user config; when you are done, `claude mcp remove depot` and add the published package back. Start `claude` in any directory, type `/mcp`, and confirm the depot server lists 40 tools (28 read-only, 4 beta, 8 write).
+`claude mcp add` stores the token in plain text in Claude Code's user config; when you are done, `claude mcp remove depot` and add the published package back. Start `claude` in any directory, type `/mcp`, and confirm the depot server lists 43 tools (28 read-only, 4 beta, 11 write, two of which are the sandbox writes that need both flags).
 
 Keep the server's stderr in view: Claude Code writes each MCP server's stderr to its log directory (`claude --debug` prints the path). Every applied write logs a `[depot-mcp write]` line there; in this test none should appear until prompt 13 is deliberately confirmed, and none at all for prompts 14 and 15.
 

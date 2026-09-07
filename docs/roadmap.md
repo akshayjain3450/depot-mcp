@@ -9,7 +9,7 @@ Two constraints shape every decision here:
 
 ## Today
 
-28 always-on read-only tools, 4 read-only beta tools behind `DEPOT_MCP_ENABLE_BETA`, 8 write tools behind `DEPOT_MCP_ALLOW_WRITES`, 7 prompts, 4 resources. Everything below is on `main` unless marked otherwise; the 0.1.1 release carries only the first 16 tools and 2 prompts.
+28 always-on read-only tools, 4 read-only beta tools behind `DEPOT_MCP_ENABLE_BETA`, 9 write tools behind `DEPOT_MCP_ALLOW_WRITES` plus 2 sandbox writes behind both flags, 7 prompts, 4 resources. Everything below is on `main` unless marked otherwise; the 0.1.1 release carries only the first 16 tools and 2 prompts.
 
 ### Always on
 
@@ -68,9 +68,12 @@ Every write tool defaults to `dryRun: true`, previews from Depot's read RPCs, re
 | `depot_retry_ci_failed_jobs` | `RetryFailedJobs` | a running workflow; zero failed jobs; an ambiguous run; any job at 3 or more attempts unless forced |
 | `depot_retry_ci_job` | `RetryJob` | a job that did not fail; the same attempt cap |
 | `depot_rerun_ci_workflow` | `RerunWorkflow` | a running workflow; a full rerun when a failed subset exists, unless allowed |
+| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | anything not on `DEPOT_MCP_DISPATCH_ALLOWLIST` when set; a malformed repo; a workflow path; an empty ref; over 20 inputs or a value over 1000 characters |
 | `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value; a name that belongs to a secret |
 | `depot_delete_ci_variable` | `DeleteVariableVariant`, `DeleteVariable` | a selector matching zero or many variants; a whole-variable delete unless asked |
 | `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region |
+| `depot_stop_sandbox` (also needs `DEPOT_MCP_ENABLE_BETA`) | `depot.sandbox.v1.SandboxService/StopSandbox` | a sandbox already finished, cancelled, or failed |
+| `depot_kill_sandbox` (also needs `DEPOT_MCP_ENABLE_BETA`) | `depot.sandbox.v1.SandboxService/KillSandbox` | the same |
 
 Two copies of the write helper exist (`src/lib/write.ts` for the CI writes, `src/lib/write-config.ts` for the variable and project writes); they were built in parallel from the same specification and should be unified in a follow-up.
 
@@ -83,7 +86,6 @@ Prompts: `diagnose-latest-failure`, `explain-build-slowness`, `triage-failures-t
 | Tool | Depot RPCs | Why it is still pending |
 | --- | --- | --- |
 | `depot_list_test_results` | none public; `depot tests --output json` via the CLI | Only reachable by shelling out to the `depot` binary, which this server does not require. Needs a `DEPOT_MCP_USE_CLI` opt-in. |
-| `depot_dispatch_ci_workflow` | `DispatchWorkflow` | A write that can deploy to production if the workflow does; wants an allowlist design and a live verification plan before it exists. |
 
 Deliberately not added: standalone secret and variable getters (the list tools with filters already answer the question), organization details (no RPC beyond `ListOrganizations`, which Organization tokens cannot call), and the log streaming RPCs (Depot caps concurrent streams per organization, so a careless tool could starve real CI).
 
@@ -117,7 +119,8 @@ Deliberately not added: standalone secret and variable getters (the list tools w
 | 0.1.1 (released) | 16 | 2 | 0 |
 | `main` today, always on | 28 | 7 | 4 |
 | behind `DEPOT_MCP_ENABLE_BETA` | +4 | | |
-| behind `DEPOT_MCP_ALLOW_WRITES` | +8 | | |
-| Still pending | +2 | | |
+| behind `DEPOT_MCP_ALLOW_WRITES` | +9 | | |
+| behind both flags | +2 | | |
+| Still pending | +1 | | |
 
 For scale, the one known third-party codebase with Depot tools ships 46, of which 15 are writes this project excludes permanently. This surface is comparable on reads, adds sandbox and registry reads it lacks, and contains none of the credential or deletion operations.

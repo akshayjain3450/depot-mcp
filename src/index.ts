@@ -16,8 +16,12 @@ Configuration is read from the environment:
   DEPOT_MCP_OUTPUT_BUDGET  Characters of tool output per call (positive integer).
   DEPOT_MCP_ENABLE_BETA    Also register the read-only sandbox and registry tools built on
                            Depot's beta APIs (depot.sandbox.v1, depot.registry.v1beta1).
-  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the Depot CI write tools (cancel, retry, rerun).
-                           Off by default. Every write defaults to dryRun:true.
+  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the write tools (cancel, retry, rerun, dispatch,
+                           CI variables, project creation; sandbox stop and kill with the beta
+                           flag). Off by default. Every write defaults to dryRun:true.
+  DEPOT_MCP_DISPATCH_ALLOWLIST
+                           Comma-separated owner/name:workflow.yml entries that
+                           depot_dispatch_ci_workflow may start. Unset: any repository the token sees.
 
 See the README for the MCP client configuration and the full list of tools.
 `;

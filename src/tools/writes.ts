@@ -1,6 +1,8 @@
+import type { ToolModule } from '../lib/tool.js';
+import { dispatchCiWorkflowTool } from './ci-dispatch.js';
 import { deleteCiVariableTool, setCiVariableTool } from './ci-variables-write.js';
 import { createProjectTool } from './projects-write.js';
-import type { ToolModule } from '../lib/tool.js';
+import { killSandboxTool, stopSandboxTool } from './sandbox-writes.js';
 import {
   cancelCiJobTool,
   cancelCiRunTool,
@@ -22,7 +24,15 @@ export const mutatingTools: readonly ToolModule[] = [
   retryCiFailedJobsTool,
   retryCiJobTool,
   rerunCiWorkflowTool,
+  dispatchCiWorkflowTool,
   setCiVariableTool,
   deleteCiVariableTool,
   createProjectTool,
 ];
+
+/**
+ * Writes over Depot's beta sandbox API. Registered only when DEPOT_MCP_ALLOW_WRITES and
+ * DEPOT_MCP_ENABLE_BETA are both set: the first because they mutate, the second because
+ * `depot.sandbox.v1` is published only as a proto and may change without notice.
+ */
+export const betaMutatingTools: readonly ToolModule[] = [stopSandboxTool, killSandboxTool];

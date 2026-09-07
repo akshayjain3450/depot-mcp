@@ -22,6 +22,7 @@ const WRITE_TOOL_NAMES = [
   'depot_retry_ci_failed_jobs',
   'depot_retry_ci_job',
   'depot_rerun_ci_workflow',
+  'depot_dispatch_ci_workflow',
   'depot_set_ci_variable',
   'depot_delete_ci_variable',
   'depot_create_project',
@@ -197,6 +198,7 @@ describe('tools/list with DEPOT_MCP_ALLOW_WRITES', () => {
     expect(byName.get('depot_retry_ci_failed_jobs')).toMatchObject({ destructiveHint: false, idempotentHint: false });
     expect(byName.get('depot_retry_ci_job')).toMatchObject({ destructiveHint: false, idempotentHint: false });
     expect(byName.get('depot_rerun_ci_workflow')).toMatchObject({ destructiveHint: false, idempotentHint: false });
+    expect(byName.get('depot_dispatch_ci_workflow')).toMatchObject({ destructiveHint: false, idempotentHint: false });
 
     // The read-only tools keep their annotations when writes are on.
     for (const tool of tools) {

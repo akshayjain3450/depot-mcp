@@ -9,6 +9,8 @@ import { durationSecondsBetween } from './time.js';
 export const workflowListEntrySchema = z.object({
   workflowId: z.string().optional(),
   name: z.string().optional(),
+  /** The workflow file basename, for example `ci.yml`; Depot reports it on push-triggered rows. */
+  workflowPath: z.string().optional(),
   repo: z.string().optional(),
   status: z.string().optional(),
   trigger: z.string().optional(),
@@ -36,6 +38,7 @@ export function parseWorkflowListEntry(source: JsonObject): WorkflowListEntry {
   return {
     workflowId: readString(source, 'workflowId', 'id'),
     name: readString(source, 'name', 'workflowName'),
+    workflowPath: readString(source, 'workflowPath', 'path', 'workflowFile'),
     repo: readString(source, 'repo', 'repository'),
     status: readEnum(source, ['status', 'workflowStatus'], STATUS_PREFIXES),
     trigger: readEnum(source, ['trigger'], ['trigger']),

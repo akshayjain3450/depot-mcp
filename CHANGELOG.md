@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Four read-only resources, advertised through `resources/list` and `resources/templates/list`: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, `depot://projects`.
 - `ToolContext` carries an injectable `sleep` and `now`; the test harness advances a virtual clock so polling tests never wait.
 - `scripts/smoke.ts` exercises the new read RPCs; the CI stdio smoke checks the tool count with the beta and write flags on and off.
+- `depot_dispatch_ci_workflow` behind `DEPOT_MCP_ALLOW_WRITES`: starts a workflow file on a branch, tag, or commit (`DispatchWorkflow`, the API form of `depot ci dispatch`) with optional `workflow_dispatch` inputs. The preview lists the repository's recent workflows, names the last run of the same file and how it ended, and says plainly that a new run may deploy or spend minutes. Refuses a repo that is not `owner/name`, a workflow given as a path, an empty ref, more than 20 inputs or any value over 1000 characters, and, when `DEPOT_MCP_DISPATCH_ALLOWLIST` is set, any `owner/name:workflow.yml` pair not on it. Request field names (`repo`, `workflow`, `ref`, `inputs`) and the `runId` in the response come from Depot's CLI bindings.
+- `DEPOT_MCP_DISPATCH_ALLOWLIST`: optional comma-separated `owner/name:workflow.yml` entries the dispatch tool may start; unset allows any repository the token can see, and a malformed entry stops the server at startup.
+- `depot_stop_sandbox` and `depot_kill_sandbox`, registered only when both `DEPOT_MCP_ALLOW_WRITES` and `DEPOT_MCP_ENABLE_BETA` are set: graceful stop (`StopSandbox`, lands in finished) and forced termination (`KillSandbox`, destructive, lands in cancelled) of a Depot sandbox, previewed from `GetSandbox` and refused for a sandbox already in a terminal state. Request shape from `depot/sandbox-sdk` sandbox.proto (`{sandbox: {id}}`).
+- `depot_list_ci_workflows` reports `workflowPath` (the workflow file) when Depot includes it.
+- `npm run verify:apply` dispatches the lab repository's deliberately failing `artifacts.yml` after the rerun step and waits for the new run; the guard now also blocks `Dispatch`, `Stop`, and `Kill` paths while the apply gate is closed.
 - `npm run verify` (`scripts/verify.ts`): release verification against a live organization, one in-process server and MCP client per token kind in `.env`. Calls every registered tool, prompt, and resource, validates structured content against each advertised output schema, dry-runs every write tool, prints a cross-token matrix, and writes a Markdown report to `docs/verification/latest.md` (gitignored). A registered tool without an argument builder in `scripts/verify-scenarios.ts` fails the run, and a unit test enforces the same. `npm run verify:apply` adds the apply scenarios behind a gate (`DEPOT_MCP_VERIFY_APPLY=1`, the Organization token, and `DEPOT_MCP_VERIFY_ORG` equal to the active organization); a fetch wrapper refuses any mutating RPC while the gate is closed. `docs/verification.md` is the session guide, including the Claude Code prompt list and scoring rubric a release needs once per version.
 
 ### Changed
@@ -34,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The apply path of every write tool. The variable and project write request shapes are inferred from Depot's CLI bindings and `depot/proto` and are documented as assumptions in the tool descriptions.
 - Beta tools with a user token.
+- The apply path of `depot_dispatch_ci_workflow`, `depot_stop_sandbox`, and `depot_kill_sandbox`. Dry runs were exercised live on 2026-09-07: the dispatch preview against the lab repository (and its allowlist refusal), and the sandbox writes only through the `not_found` path, since the trial organization has no sandboxes. The verify script's apply phase covers the dispatch.
 
 ## [0.1.1] - 2026-09-06
 

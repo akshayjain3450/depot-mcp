@@ -265,6 +265,11 @@ export const WRITE_TOOL_MATRIX: readonly ToolInvocation[] = [
     routes: { [RPC.getWorkflow]: ok(fixture('workflow-write')) },
   },
   {
+    name: 'depot_dispatch_ci_workflow',
+    args: { repo: 'acme/api', workflow: 'ci.yml', ref: 'main' },
+    routes: { [RPC.listWorkflows]: ok(fixture('workflows-list')) },
+  },
+  {
     name: 'depot_set_ci_variable',
     args: { name: 'DEPLOY_ENV', value: 'staging' },
     routes: { [RPC.getVariable]: ok(fixture('variable')), [RPC.listSecrets]: ok(fixture('secrets')) },

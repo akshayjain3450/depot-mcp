@@ -5,7 +5,7 @@ import { TextBudget } from '../lib/budget.js';
 import { parseProject } from '../lib/project.js';
 import { defineTool } from '../lib/tool.js';
 import { betaTools } from './beta.js';
-import { mutatingTools } from './writes.js';
+import { betaMutatingTools, mutatingTools } from './writes.js';
 
 const PROJECT_PREVIEW_LIMIT = 25;
 
@@ -161,7 +161,7 @@ Never returns the token or any part of it.`,
       );
     }
     const registeredWrites = context.config.allowWrites
-      ? mutatingTools.map((tool) => tool.name)
+      ? [...mutatingTools, ...(context.config.enableBeta ? betaMutatingTools : [])].map((tool) => tool.name)
       : [];
 
     const text = new TextBudget(context.config.outputCharBudget);

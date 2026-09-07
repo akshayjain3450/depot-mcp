@@ -321,6 +321,20 @@ export class DepotApi {
   }
 
   /**
+   * Mutating. Field names from Depot's CLI bindings (`pkg/proto/depot/ci/v1/ci.pb.go`,
+   * `DispatchWorkflowRequest`): `repo` in owner/name form, `workflow` as the file basename, `ref`
+   * a branch or tag, `inputs` a string map; `orgId` is left to the `x-depot-org` header. The
+   * response carries `orgId` and `runId`. Never invoked live by this project.
+   */
+  dispatchWorkflow(request: DispatchWorkflowRequest): Promise<JsonObject> {
+    const body: JsonObject = { repo: request.repo, workflow: request.workflow, ref: request.ref };
+    if (request.inputs !== undefined && Object.keys(request.inputs).length > 0) {
+      body.inputs = { ...request.inputs };
+    }
+    return this.client.call(rpc(CI, 'DispatchWorkflow'), body);
+  }
+
+  /**
    * v3beta2 secret/variable list filters are undocumented, and Connect's JSON codec rejects
    * unknown fields, so the request is deliberately empty and all filtering happens client-side.
    */
@@ -343,6 +357,20 @@ export class DepotApi {
   /** GetSandbox takes a SandboxRef, whose only selector today is `id`. */
   getSandbox(sandboxId: string): Promise<JsonObject> {
     return this.client.call(rpc(SANDBOX, 'GetSandbox'), { id: sandboxId });
+  }
+
+  /**
+   * Mutating, beta. `StopSandboxRequest` wraps the SandboxRef under `sandbox` (depot/sandbox-sdk
+   * sandbox.proto); a graceful stop that lands in FINISHED. Depot answers `failed_precondition`
+   * for a sandbox already in a terminal state. Never invoked live by this project.
+   */
+  stopSandbox(sandboxId: string): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'StopSandbox'), { sandbox: { id: sandboxId } });
+  }
+
+  /** Mutating, beta. Same shape as StopSandbox; a hard termination that lands in CANCELLED. */
+  killSandbox(sandboxId: string): Promise<JsonObject> {
+    return this.client.call(rpc(SANDBOX, 'KillSandbox'), { sandbox: { id: sandboxId } });
   }
 
   listRegistryRepositories(request: RegistryPageRequest = {}): Promise<JsonObject> {
@@ -416,6 +444,13 @@ export interface SetVariableVariantRequest {
   value: string;
   description?: string | undefined;
   attributes: VariableAttribute[];
+}
+
+export interface DispatchWorkflowRequest {
+  repo: string;
+  workflow: string;
+  ref: string;
+  inputs?: Readonly<Record<string, string>> | undefined;
 }
 
 export interface CreateProjectRequest {

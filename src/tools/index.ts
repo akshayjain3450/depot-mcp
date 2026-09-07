@@ -19,9 +19,9 @@ import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
 import { getUsageTool, listProjectUsageTool } from './usage.js';
 import { whoamiTool } from './whoami.js';
-import { mutatingTools } from './writes.js';
+import { betaMutatingTools, mutatingTools } from './writes.js';
 
-export { mutatingTools };
+export { betaMutatingTools, mutatingTools };
 
 export const readOnlyTools: readonly ToolModule[] = [
   whoamiTool,
@@ -60,6 +60,7 @@ export interface RegistrationSummary {
   readonly readOnly: string[];
   /** Read-only tools over beta Depot APIs; empty unless DEPOT_MCP_ENABLE_BETA is set. */
   readonly beta: string[];
+  /** Every registered write tool, the beta sandbox writes included when both gates are open. */
   readonly mutating: string[];
   readonly writesEnabled: boolean;
   readonly betaEnabled: boolean;
@@ -79,12 +80,19 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
   }
 
   // The gate. With DEPOT_MCP_ALLOW_WRITES unset the write tools are never registered, so a
-  // client cannot list, call, or be talked into calling them.
+  // client cannot list, call, or be talked into calling them. The sandbox writes sit behind
+  // the beta gate as well, since their API is beta.
   const mutating: string[] = [];
   if (context.config.allowWrites) {
     for (const tool of mutatingTools) {
       tool.register(server, context);
       mutating.push(tool.name);
+    }
+    if (context.config.enableBeta) {
+      for (const tool of betaMutatingTools) {
+        tool.register(server, context);
+        mutating.push(tool.name);
+      }
     }
   }
 

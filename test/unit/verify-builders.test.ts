@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { betaTools, mutatingTools, readOnlyTools } from '../../src/tools/index.js';
+import { betaMutatingTools, betaTools, mutatingTools, readOnlyTools } from '../../src/tools/index.js';
 import {
   emptyDiscovery,
   expandTemplate,
@@ -19,7 +19,7 @@ afterEach(async () => {
 });
 
 const readNames = [...readOnlyTools, ...betaTools].map((tool) => tool.name);
-const writeNames = mutatingTools.map((tool) => tool.name);
+const writeNames = [...mutatingTools, ...betaMutatingTools].map((tool) => tool.name);
 
 describe('verify argument builders', () => {
   it('cover every read-only and beta tool, and nothing else', () => {

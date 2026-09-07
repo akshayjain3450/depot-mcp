@@ -177,19 +177,21 @@ describe('depot_whoami', () => {
     const result = await callTool(harness, 'depot_whoami', {});
 
     expect(result.structured.writesEnabled).toBe(true);
-    expect(result.structured.mutatingToolsAvailable).toBe(8);
+    expect(result.structured.mutatingToolsAvailable).toBe(9);
     expect(result.structured.mutatingTools).toEqual([
       'depot_cancel_ci_run',
       'depot_cancel_ci_job',
       'depot_retry_ci_failed_jobs',
       'depot_retry_ci_job',
       'depot_rerun_ci_workflow',
+      'depot_dispatch_ci_workflow',
       'depot_set_ci_variable',
       'depot_delete_ci_variable',
       'depot_create_project',
     ]);
     expect(result.text).toContain('Writes: ENABLED');
-    expect(result.text).toContain('8 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.text).toContain('9 mutating tool(s) registered: depot_cancel_ci_run');
+    expect(result.structured.mutatingTools).not.toContain('depot_stop_sandbox');
     expect(result.text).toContain('dryRun:true');
     expect(JSON.stringify(result.structured.warnings)).not.toContain('no effect');
   });

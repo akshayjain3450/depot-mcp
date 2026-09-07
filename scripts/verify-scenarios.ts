@@ -97,6 +97,16 @@ export const VERIFY_VARIABLE_NAME = 'DEPOT_MCP_VERIFY';
 export const VERIFY_PROJECT_NAME = 'depot-mcp-verify';
 
 /**
+ * The workflow the dispatch scenarios start: the lab repository's `artifacts.yml`, which fails on
+ * purpose within seconds, so a dispatched run costs almost nothing and never deploys anything.
+ */
+export const VERIFY_DISPATCH = {
+  repo: 'akshayjain3450/depot-ci-lab',
+  workflow: 'artifacts.yml',
+  ref: 'main',
+} as const;
+
+/**
  * One builder per read-only tool (beta tools included). Values come from discovery; a builder
  * skips, rather than guesses, when the id it needs was not found.
  */
@@ -191,6 +201,11 @@ export const WRITE_DRY_RUN_ARGUMENTS: Readonly<Record<string, WriteDryRunScenari
     expect: 'preview',
     why: 'allowFullRerun lifts the only refusal that applies to a finished workflow',
   },
+  depot_dispatch_ci_workflow: {
+    build: () => ({ args: { ...VERIFY_DISPATCH } }),
+    expect: 'either',
+    why: 'a preview naming the last run of the lab workflow, or a refusal when DEPOT_MCP_DISPATCH_ALLOWLIST leaves it out',
+  },
   depot_set_ci_variable: {
     build: (d) => ({ args: { name: VERIFY_VARIABLE_NAME, value: `ok-${d.stamp}` } }),
     expect: 'preview',
@@ -205,6 +220,17 @@ export const WRITE_DRY_RUN_ARGUMENTS: Readonly<Record<string, WriteDryRunScenari
     build: () => ({ args: { name: VERIFY_PROJECT_NAME } }),
     expect: 'either',
     why: 'a preview the first time, a duplicate-name refusal once an apply run has created one',
+  },
+  // Beta sandbox writes, registered only with both gates open.
+  depot_stop_sandbox: {
+    build: (d) => need(d.sandboxId, 'sandbox', (sandboxId) => ({ sandboxId })),
+    expect: 'either',
+    why: 'a refusal when the discovered sandbox is terminal, a preview while it runs',
+  },
+  depot_kill_sandbox: {
+    build: (d) => need(d.sandboxId, 'sandbox', (sandboxId) => ({ sandboxId })),
+    expect: 'either',
+    why: 'the same rule as stop',
   },
 };
 

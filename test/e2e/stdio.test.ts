@@ -240,8 +240,8 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
 
     expect(exit.code).toBe(0);
-    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 8 mutating tool(s)');
-    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 8 mutating tool(s) registered');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 9 mutating tool(s)');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 9 mutating tool(s) registered');
     expect(spawned.stderr()).toContain('depot_cancel_ci_run');
     expect(spawned.stderr()).toContain('dryRun:true');
     expect(spawned.stderr()).not.toContain('dummy');
