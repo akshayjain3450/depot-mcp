@@ -1,6 +1,6 @@
 {
   "name": "depot-mcp",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "depot.dev MCP server: read-only CI failure diagnosis, container build forensics, and usage insight for coding agents",
   "keywords": [
     "depot.dev",

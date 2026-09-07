@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0] - 2026-09-07
+
+The write release: 12 more read tools, opt-in write tools, prompts and resources, and a release verification script. Every tool was verified against a real Depot organization; see `docs/verification.md`.
+
 ### Added
 
 - Twelve read-only tools, bringing the always-on total to 28, all verified live on 2026-09-06 against a trial organization:
@@ -118,6 +124,7 @@ First release.
 - Untrusted CI content (logs, summaries, Depot's AI diagnosis and suggested fix) is fenced and labelled in tool summaries, and the server instructions tell the model to treat it as data.
 - Credential redaction rewritten: unanchored vendor patterns (GitHub, GitLab, AWS, Google, Slack, Stripe, OpenAI, Anthropic, npm, PyPI, Docker Hub, Vault, Depot, JWT, Bearer/Basic, PEM), structural rules (`user:pass@` URLs, `password=`-style fragments), a length rule, and a windowed entropy rule that no longer over-redacts URLs, paths, image references, semver strings, or git SHAs. Name matching is segment-based, so `AUTHOR_NAME` and `CERT_PATH` are no longer redacted while `DB_PASS` and `SLACK_WEBHOOK` are.
 
-[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/akshayjain3450/depot-mcp/releases/tag/v0.1.0
