@@ -36,10 +36,34 @@ describe('loadConfig', () => {
       orgId: undefined,
       projectId: undefined,
       allowWrites: false,
+      allowDestructive: false,
       enableBeta: false,
       maxLogPages: DEFAULT_MAX_LOG_PAGES,
       outputCharBudget: DEFAULT_OUTPUT_CHAR_BUDGET,
     });
+  });
+
+  it('parses the destructive gate like the write gate, and keeps the two independent', () => {
+    expect(loadConfig({ DEPOT_TOKEN: 't' }).allowDestructive).toBe(false);
+    for (const value of ['1', 'true', 'TRUE', 'yes', 'on', ' on ']) {
+      expect(
+        loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: value }).allowDestructive,
+        value,
+      ).toBe(true);
+    }
+    for (const value of ['0', 'false', 'no', 'off', '', 'delete']) {
+      expect(
+        loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: value }).allowDestructive,
+        value,
+      ).toBe(false);
+    }
+    // The value is recorded as given; registration (not parsing) is where it needs allowWrites too.
+    const alone = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_DESTRUCTIVE: '1' });
+    expect(alone.allowWrites).toBe(false);
+    expect(alone.allowDestructive).toBe(true);
+    const writesOnly = loadConfig({ DEPOT_TOKEN: 't', DEPOT_MCP_ALLOW_WRITES: '1' });
+    expect(writesOnly.allowWrites).toBe(true);
+    expect(writesOnly.allowDestructive).toBe(false);
   });
 
   it('trims surrounding whitespace from values', () => {

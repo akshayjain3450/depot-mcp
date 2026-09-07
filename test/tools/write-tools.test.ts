@@ -76,7 +76,7 @@ describe('gating', () => {
     expect(names).toEqual(
       expect.arrayContaining(['depot_set_ci_variable', 'depot_delete_ci_variable', 'depot_create_project']),
     );
-    expect(tools).toHaveLength(36);
+    expect(tools).toHaveLength(37);
     for (const name of ['depot_set_ci_variable', 'depot_delete_ci_variable', 'depot_create_project']) {
       const tool = tools.find((entry) => entry.name === name);
       const dryRun = record(record(tool?.inputSchema.properties).dryRun);

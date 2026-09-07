@@ -40,6 +40,8 @@ The short version: **use an Organization token.** It runs every tool, including 
 | `depot_set_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_delete_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_create_project` (write, opt-in) | yes | **no** (`ProjectService` refuses user tokens; the dry run fails at `ListProjects`) |
+| `depot_update_project` (write, opt-in) | yes | **no** (`ProjectService`; the dry run fails at `GetProject`) |
+| `depot_delete_project` (destructive, behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` too) | yes | **no** (`ProjectService` and `BuildService`; the dry run fails at `GetProject`) |
 | Prompt `diagnose-latest-failure` | yes | yes |
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 | Write tools (`DEPOT_MCP_ALLOW_WRITES`): `depot_cancel_ci_run`, `depot_cancel_ci_job`, `depot_retry_ci_failed_jobs`, `depot_retry_ci_job`, `depot_rerun_ci_workflow` | dry run verified; apply expected to work (same CI service) | expected to work for both steps, not yet verified |
@@ -53,7 +55,7 @@ The five write tools call `depot.ci.v1.CIService` only, the same service every C
 
 Write tools planned on the roadmap for Depot's core services (`depot_create_project` on `depot.core.v1.ProjectService`, for example) will need an Organization token, since those services refuse user tokens for reads and there is no reason to expect writes to differ.
 
-Whatever the token kind, the token is not what keeps writes from happening: `DEPOT_MCP_ALLOW_WRITES` is. See below.
+Whatever the token kind, the token is not what keeps writes from happening: `DEPOT_MCP_ALLOW_WRITES` is, and for the irreversible ones `DEPOT_MCP_ALLOW_DESTRUCTIVE` on top of it. See below.
 
 ## By Depot service
 

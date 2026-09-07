@@ -19,9 +19,9 @@ import { getProjectTool, listProjectsTool } from './projects.js';
 import { listImagesTool } from './registry.js';
 import { getUsageTool, listProjectUsageTool } from './usage.js';
 import { whoamiTool } from './whoami.js';
-import { mutatingTools } from './writes.js';
+import { destructiveTools, destructiveWritesEnabled, mutatingTools } from './writes.js';
 
-export { mutatingTools };
+export { destructiveTools, mutatingTools };
 
 export const readOnlyTools: readonly ToolModule[] = [
   whoamiTool,
@@ -60,8 +60,12 @@ export interface RegistrationSummary {
   readonly readOnly: string[];
   /** Read-only tools over beta Depot APIs; empty unless DEPOT_MCP_ENABLE_BETA is set. */
   readonly beta: string[];
+  /** Reversible writes plus, when both gates are open, the destructive ones. */
   readonly mutating: string[];
+  /** Irreversible writes; empty unless DEPOT_MCP_ALLOW_WRITES and DEPOT_MCP_ALLOW_DESTRUCTIVE are both set. */
+  readonly destructive: string[];
   readonly writesEnabled: boolean;
+  readonly destructiveEnabled: boolean;
   readonly betaEnabled: boolean;
 }
 
@@ -88,11 +92,25 @@ export function registerTools(server: McpServer, context: ToolContext): Registra
     }
   }
 
+  // The second gate. DEPOT_MCP_ALLOW_DESTRUCTIVE on its own registers nothing: an operator who
+  // turns writes off must not find deletion still reachable.
+  const destructive: string[] = [];
+  const destructiveEnabled = destructiveWritesEnabled(context.config);
+  if (destructiveEnabled) {
+    for (const tool of destructiveTools) {
+      tool.register(server, context);
+      mutating.push(tool.name);
+      destructive.push(tool.name);
+    }
+  }
+
   return {
     readOnly: readOnlyTools.map((tool) => tool.name),
     beta,
     mutating,
+    destructive,
     writesEnabled: context.config.allowWrites,
+    destructiveEnabled,
     betaEnabled: context.config.enableBeta,
   };
 }

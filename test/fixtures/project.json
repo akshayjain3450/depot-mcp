@@ -1,0 +1,11 @@
+{
+  "project": {
+    "projectId": "proj_api7f2",
+    "organizationId": "org_1a2b3c",
+    "name": "api",
+    "regionId": "us-east-1",
+    "createdAt": "2025-05-12T09:14:00Z",
+    "cachePolicy": { "keepDays": 14, "keepGb": 50 },
+    "hardware": "HARDWARE_16X32"
+  }
+}

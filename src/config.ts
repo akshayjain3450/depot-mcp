@@ -14,6 +14,12 @@ export interface DepotMcpConfig {
    */
   readonly allowWrites: boolean;
   /**
+   * Second gate, for writes that cannot be undone (`src/tools/writes.ts`, `destructiveTools`).
+   * Off by default and meaningless on its own: a destructive tool is registered only when this
+   * and `allowWrites` are both set, so enabling writes never enables deletion by accident.
+   */
+  readonly allowDestructive: boolean;
+  /**
    * Gate for tools built on Depot APIs that Depot itself labels beta or publishes only as protos
    * (`depot.sandbox.v1`, `depot.registry.v1beta1`). Off by default so a client never sees a tool
    * whose upstream contract may change without notice.
@@ -153,6 +159,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): DepotMcpConfig
     orgId: readOptional(env.DEPOT_ORG_ID),
     projectId: readOptional(env.DEPOT_PROJECT_ID),
     allowWrites: readBooleanFlag(env.DEPOT_MCP_ALLOW_WRITES),
+    allowDestructive: readBooleanFlag(env.DEPOT_MCP_ALLOW_DESTRUCTIVE),
     enableBeta: readBooleanFlag(env.DEPOT_MCP_ENABLE_BETA),
     maxLogPages: readPositiveInt(
       env.DEPOT_MCP_MAX_LOG_PAGES,

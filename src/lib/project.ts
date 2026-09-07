@@ -22,6 +22,32 @@ const HARDWARE_BY_NUMBER: Readonly<Record<number, string>> = {
   10: '384x768',
 };
 
+/** The builder sizes Depot documents, as CPUxGB labels, smallest first. */
+export const HARDWARE_LABELS = [
+  '4x4',
+  '4x8',
+  '8x8',
+  '8x16',
+  '16x32',
+  '32x64',
+  '64x128',
+  '96x192',
+  '192x384',
+  '384x768',
+] as const;
+
+export type HardwareLabel = (typeof HARDWARE_LABELS)[number];
+
+/** The enum name Depot's JSON binding accepts for a label: `16x32` travels as `HARDWARE_16X32`. */
+export function hardwareWireName(label: HardwareLabel): string {
+  return `HARDWARE_${label.toUpperCase()}`;
+}
+
+/** Depot's `HARDWARE_UNSPECIFIED` means 16x32; comparisons treat the two as the same size. */
+export function effectiveHardware(label: string | undefined): string | undefined {
+  return label?.startsWith('unspecified') === true ? '16x32' : label;
+}
+
 export interface ProjectSummary {
   projectId: string | undefined;
   name: string | undefined;

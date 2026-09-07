@@ -167,7 +167,7 @@ interface Gate {
   readonly violations: string[];
 }
 
-const MUTATING_PATH = /Cancel|Retry|Rerun|Set|Delete|Create/;
+const MUTATING_PATH = /Cancel|Retry|Rerun|Set|Delete|Create|Update/;
 
 /** The safety net: no request whose path names a mutating RPC leaves the process while closed. */
 function guardedFetch(gate: Gate): FetchLike {
@@ -763,18 +763,49 @@ async function runApplyScenarios(session: Session, d: Discovery, record: Recorde
     }
   }
 
-  // (d) Create a project and read it back.
+  // (d) Create a project, read it back, update its cache policy, and delete it again when the
+  // destructive gate is open. Only the throwaway project is ever updated or deleted.
   const projectName = `${VERIFY_PROJECT_NAME}-${d.stamp}`;
   const created = await apply('depot_create_project', { name: projectName }, 'apply create project');
   const projectId = readString(readObject(readObject(created.structured, 'after'), 'project'), 'projectId');
   if (projectId === undefined) {
     record('apply get created project', { kind: 'skipped', note: 'create returned no projectId' });
-  } else {
-    record('apply get created project', classify(await invoke(session, 'depot_get_project', { projectId })));
+    record('apply update project', { kind: 'skipped', note: 'create returned no projectId' });
+    record('apply delete project', { kind: 'skipped', note: 'create returned no projectId' });
+    return;
   }
-  say('');
-  say('*** REMINDER: projects cannot be deleted through this server. ***');
-  say(`*** Remove "${projectName}"${projectId === undefined ? '' : ` (${projectId})`} in the Depot dashboard. ***`);
+  record('apply get created project', classify(await invoke(session, 'depot_get_project', { projectId })));
+  await apply('depot_update_project', { projectId, cacheKeepDays: 7 }, 'apply update project');
+
+  const deleteRegistered = session.tools.some((tool) => tool.name === 'depot_delete_project');
+  if (!deleteRegistered) {
+    record('apply delete project', {
+      kind: 'skipped',
+      note: 'DEPOT_MCP_ALLOW_DESTRUCTIVE is not set, so depot_delete_project is not registered',
+    });
+    say('');
+    say('*** REMINDER: DEPOT_MCP_ALLOW_DESTRUCTIVE was not set, so the project was not deleted. ***');
+    say(`*** Remove "${projectName}" (${projectId}) in the Depot dashboard, or rerun with DEPOT_MCP_ALLOW_DESTRUCTIVE=1. ***`);
+    return;
+  }
+  const deleted = await apply(
+    'depot_delete_project',
+    { projectId, confirmProjectName: projectName },
+    'apply delete project',
+  );
+  const afterDelete = await invoke(session, 'depot_get_project', { projectId });
+  const goneOutcome = classify(afterDelete);
+  record('apply confirm project gone', {
+    ...goneOutcome,
+    note:
+      goneOutcome.kind === 'depot' && goneOutcome.code === 'not_found'
+        ? 'GetProject answers not_found, as a deleted project should'
+        : `expected not_found after delete; ${goneOutcome.note}`,
+  });
+  if (deleted.isError) {
+    say('');
+    say(`*** REMINDER: the delete was refused or failed; remove "${projectName}" (${projectId}) in the Depot dashboard. ***`);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------

@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Four read-only resources, advertised through `resources/list` and `resources/templates/list`: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, `depot://projects`.
 - `ToolContext` carries an injectable `sleep` and `now`; the test harness advances a virtual clock so polling tests never wait.
 - `scripts/smoke.ts` exercises the new read RPCs; the CI stdio smoke checks the tool count with the beta and write flags on and off.
+- `depot_update_project` behind `DEPOT_MCP_ALLOW_WRITES` (`ProjectService/UpdateProject`): name, hardware, and cache policy. The dry run shows the diff against `GetProject`, warns when the cache shrinks (eviction) or the hardware changes (cost), and refuses a no-op, a region change (Depot does not move projects), and a cache number below 1. Both cache numbers travel together because Depot reads an omitted one as zero.
+- A second write gate, `DEPOT_MCP_ALLOW_DESTRUCTIVE`, parsed like `DEPOT_MCP_ALLOW_WRITES` and meaningless without it. Behind both flags: `depot_delete_project` (`ProjectService/DeleteProject`), which previews the project, its build count, and its last build time, refuses unless `confirmProjectName` equals the current name, and refuses a project built in the last 24 hours unless `force: true`. With writes on and the second flag off it is absent from `tools/list`, and `depot_whoami` reports the destructive gate as off (`destructiveEnabled`, `destructiveTools`).
+- `npm run verify:apply` updates the project it creates (`cacheKeepDays: 7`) and, when `DEPOT_MCP_ALLOW_DESTRUCTIVE=1` is set, deletes it through `depot_delete_project` and confirms `GetProject` answers `not_found`; otherwise it prints the dashboard reminder as before. The verify fetch guard now also blocks `Update` paths while the apply gate is closed.
 - `npm run verify` (`scripts/verify.ts`): release verification against a live organization, one in-process server and MCP client per token kind in `.env`. Calls every registered tool, prompt, and resource, validates structured content against each advertised output schema, dry-runs every write tool, prints a cross-token matrix, and writes a Markdown report to `docs/verification/latest.md` (gitignored). A registered tool without an argument builder in `scripts/verify-scenarios.ts` fails the run, and a unit test enforces the same. `npm run verify:apply` adds the apply scenarios behind a gate (`DEPOT_MCP_VERIFY_APPLY=1`, the Organization token, and `DEPOT_MCP_VERIFY_ORG` equal to the active organization); a fetch wrapper refuses any mutating RPC while the gate is closed. `docs/verification.md` is the session guide, including the Claude Code prompt list and scoring rubric a release needs once per version.
 
 ### Changed
@@ -33,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Not verified live
 
 - The apply path of every write tool. The variable and project write request shapes are inferred from Depot's CLI bindings and `depot/proto` and are documented as assumptions in the tool descriptions.
+- `UpdateProject` and `DeleteProject` apply paths: both tools were dry-run live against a trial organization, never applied.
 - Beta tools with a user token.
 
 ## [0.1.1] - 2026-09-06

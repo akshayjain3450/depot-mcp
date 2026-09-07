@@ -402,6 +402,20 @@ export class DepotApi {
   createProject(request: CreateProjectRequest): Promise<JsonObject> {
     return this.client.call(rpc(CORE_PROJECT, 'CreateProject'), { ...request });
   }
+
+  /**
+   * Mutating. Shape from `depot/proto` `UpdateProjectRequest`: every field but `projectId` is
+   * optional and an omitted one is left as it is. `cachePolicy` is a whole message, so a caller
+   * changing one of its two numbers must send both or Depot reads the other as zero.
+   */
+  updateProject(request: UpdateProjectRequest): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'UpdateProject'), { ...request });
+  }
+
+  /** Mutating and irreversible. `DeleteProjectRequest` is the project id alone. */
+  deleteProject(projectId: string): Promise<JsonObject> {
+    return this.client.call(rpc(CORE_PROJECT, 'DeleteProject'), { projectId });
+  }
 }
 
 export interface VariableAttribute {
@@ -421,6 +435,14 @@ export interface SetVariableVariantRequest {
 export interface CreateProjectRequest {
   name: string;
   regionId: string;
+  cachePolicy?: { keepDays: number; keepGb: number } | undefined;
+  hardware?: string | undefined;
+}
+
+export interface UpdateProjectRequest {
+  projectId: string;
+  name?: string | undefined;
+  regionId?: string | undefined;
   cachePolicy?: { keepDays: number; keepGb: number } | undefined;
   hardware?: string | undefined;
 }

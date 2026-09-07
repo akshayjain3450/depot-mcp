@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { asObject } from '../src/depot/shape.js';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
 import { callTool, createHarness, type Harness } from './helpers/harness.js';
-import { BETA_TOOL_MATRIX, TOOL_MATRIX, WRITE_TOOL_MATRIX } from './helpers/matrix.js';
+import { BETA_TOOL_MATRIX, DESTRUCTIVE_TOOL_MATRIX, TOOL_MATRIX, WRITE_TOOL_MATRIX } from './helpers/matrix.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const TOOL_NAME = /^depot_[a-z0-9]+(?:_[a-z0-9]+)*$/;
@@ -25,7 +25,11 @@ const WRITE_TOOL_NAMES = [
   'depot_set_ci_variable',
   'depot_delete_ci_variable',
   'depot_create_project',
+  'depot_update_project',
 ];
+
+/** Registered only with DEPOT_MCP_ALLOW_DESTRUCTIVE on top of DEPOT_MCP_ALLOW_WRITES. */
+const DESTRUCTIVE_TOOL_NAMES = ['depot_delete_project'];
 
 let harness: Harness | undefined;
 
@@ -161,8 +165,18 @@ describe('tools/list', () => {
     const { tools } = await harness.client.listTools();
     const names = tools.map((tool) => tool.name);
 
-    for (const name of WRITE_TOOL_NAMES) {
+    for (const name of [...WRITE_TOOL_NAMES, ...DESTRUCTIVE_TOOL_NAMES]) {
       expect(names).not.toContain(name);
+    }
+  });
+
+  it('never lists a destructive tool on DEPOT_MCP_ALLOW_DESTRUCTIVE alone', async () => {
+    harness = await createHarness({ routes: {}, config: { allowDestructive: true } });
+    const { tools } = await harness.client.listTools();
+
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT);
+    for (const name of [...WRITE_TOOL_NAMES, ...DESTRUCTIVE_TOOL_NAMES]) {
+      expect(tools.map((tool) => tool.name)).not.toContain(name);
     }
   });
 });
@@ -176,9 +190,28 @@ describe('tools/list with DEPOT_MCP_ALLOW_WRITES', () => {
     expect(tools).toHaveLength(EXPECTED_TOOL_COUNT + WRITE_TOOL_NAMES.length);
     expect(new Set(names).size).toBe(tools.length);
     expect(names.filter((name) => WRITE_TOOL_NAMES.includes(name)).sort()).toEqual([...WRITE_TOOL_NAMES].sort());
+    for (const name of DESTRUCTIVE_TOOL_NAMES) {
+      expect(names).not.toContain(name);
+    }
     for (const name of names) {
       expect(name, name).toMatch(TOOL_NAME);
     }
+  });
+
+  it(`adds the ${DESTRUCTIVE_TOOL_NAMES.length} destructive tool(s) only when DEPOT_MCP_ALLOW_DESTRUCTIVE is set as well`, async () => {
+    harness = await createHarness({ routes: {}, config: { allowWrites: true, allowDestructive: true } });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(tools).toHaveLength(EXPECTED_TOOL_COUNT + WRITE_TOOL_NAMES.length + DESTRUCTIVE_TOOL_NAMES.length);
+    expect(names.filter((name) => DESTRUCTIVE_TOOL_NAMES.includes(name)).sort()).toEqual([...DESTRUCTIVE_TOOL_NAMES].sort());
+    for (const name of DESTRUCTIVE_TOOL_NAMES) {
+      const tool = tools.find((entry) => entry.name === name);
+      expect(tool?.annotations, name).toMatchObject({ readOnlyHint: false, destructiveHint: true, openWorldHint: true });
+      expect(asObject(asObject(tool?.inputSchema.properties)?.dryRun)?.default, name).toBe(true);
+      expect(tool?.description ?? '', name).toContain('dryRun:false');
+    }
+    expect(harness.client.getInstructions() ?? '').toContain('depot_delete_project');
   });
 
   it('annotates every write tool as not read-only and open-world, with honest destructive and idempotent hints', async () => {
@@ -256,6 +289,25 @@ describe('tools/list with DEPOT_MCP_ALLOW_WRITES', () => {
     },
   );
 
+  it.each(DESTRUCTIVE_TOOL_MATRIX)(
+    '$name dry-runs to a validated preview under both gates, calling no mutating RPC',
+    async ({ name, args, routes }) => {
+      harness = await createHarness({ routes, config: { allowWrites: true, allowDestructive: true } });
+      await harness.client.listTools();
+
+      const result = await callTool(harness, name, args);
+
+      expect(result.isError, result.text).toBe(false);
+      expect(result.structured.applied).toBe(false);
+      expect(result.structured.refusal).toBeUndefined();
+      expect(result.structured.resend).toMatchObject({ ...args, dryRun: false });
+      expect(result.text).toContain('DRY RUN');
+      for (const call of harness.calls) {
+        expect(call.rpc).toMatch(/\/(Get|List)[A-Za-z]+$/);
+      }
+    },
+  );
+
   it('mentions the write tools and the dry-run flow in the instructions only when enabled', async () => {
     harness = await createHarness({ routes: {}, config: { allowWrites: true } });
     const enabled = harness.client.getInstructions() ?? '';
@@ -264,8 +316,10 @@ describe('tools/list with DEPOT_MCP_ALLOW_WRITES', () => {
     const disabled = harness.client.getInstructions() ?? '';
 
     expect(enabled).toContain('depot_retry_ci_failed_jobs');
+    expect(enabled).toContain('depot_update_project');
     expect(enabled).toContain('dryRun:false');
     expect(enabled).toMatch(/read-only/i);
+    expect(enabled).not.toContain('depot_delete_project');
     expect(disabled).not.toContain('depot_retry_ci_failed_jobs');
     expect(disabled).toContain('Every tool here is read-only');
   });

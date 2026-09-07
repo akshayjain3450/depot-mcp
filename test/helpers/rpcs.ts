@@ -47,4 +47,6 @@ export const RPC = {
   deleteVariableVariant: 'depot.ci.v3beta2.VariableService/DeleteVariableVariant',
   deleteVariable: 'depot.ci.v3beta2.VariableService/DeleteVariable',
   createProject: 'depot.core.v1.ProjectService/CreateProject',
+  updateProject: 'depot.core.v1.ProjectService/UpdateProject',
+  deleteProject: 'depot.core.v1.ProjectService/DeleteProject',
 } as const;

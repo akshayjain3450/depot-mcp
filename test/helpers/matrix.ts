@@ -279,4 +279,24 @@ export const WRITE_TOOL_MATRIX: readonly ToolInvocation[] = [
     args: { name: 'new-project' },
     routes: { [RPC.listProjects]: ok(fixture('projects')) },
   },
+  {
+    name: 'depot_update_project',
+    args: { projectId: 'proj_api7f2', cacheKeepDays: 7 },
+    routes: { [RPC.getProject]: ok(fixture('project')) },
+  },
+];
+
+/**
+ * The destructive tools, registered only with allowDestructive on top of allowWrites. The
+ * fixture's last build is days before the harness epoch, so the recent-build rule stays quiet.
+ */
+export const DESTRUCTIVE_TOOL_MATRIX: readonly ToolInvocation[] = [
+  {
+    name: 'depot_delete_project',
+    args: { projectId: 'proj_api7f2', confirmProjectName: 'api' },
+    routes: {
+      [RPC.getProject]: ok(fixture('project')),
+      [RPC.listBuilds]: ok(fixture('builds-list')),
+    },
+  },
 ];

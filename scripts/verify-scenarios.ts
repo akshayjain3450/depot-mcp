@@ -206,6 +206,25 @@ export const WRITE_DRY_RUN_ARGUMENTS: Readonly<Record<string, WriteDryRunScenari
     expect: 'either',
     why: 'a preview the first time, a duplicate-name refusal once an apply run has created one',
   },
+  depot_update_project: {
+    build: (d) =>
+      need(d.projectId, 'project', (projectId) => ({
+        projectId,
+        name: `${VERIFY_PROJECT_NAME}-rename-${d.stamp}`,
+      })),
+    expect: 'preview',
+    why: 'a stamped name never equals the current one, so the diff has one entry and nothing shrinks',
+  },
+  // Registered only when DEPOT_MCP_ALLOW_DESTRUCTIVE is set in the environment the script runs in.
+  depot_delete_project: {
+    build: (d) =>
+      need(d.projectId, 'project', (projectId) => ({
+        projectId,
+        confirmProjectName: `${VERIFY_PROJECT_NAME}-not-this-project`,
+      })),
+    expect: 'refusal',
+    why: 'the confirmation name is deliberately wrong, so the name check must refuse before anything else',
+  },
 };
 
 /** Prompt arguments are strings on the wire. */

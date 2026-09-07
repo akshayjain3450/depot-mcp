@@ -409,6 +409,7 @@ Every setting is an environment variable, set in your client's config.
 | `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing; `depot_whoami` will say so. |
 | `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the five Depot CI [write tools](#write-tools-opt-in). Unset, they are not registered at all, so `tools/list` never shows them. Every write defaults to `dryRun: true`; `depot_whoami` reports which write tools are registered. |
 | `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the [write tools](#write-tools-opt-in). Every one defaults to `dryRun: true`; a client without the flag never sees them. The startup line on stderr and `depot_whoami` both say whether writes are on. |
+| `DEPOT_MCP_ALLOW_DESTRUCTIVE` | no | `0` | Set to `1`, together with `DEPOT_MCP_ALLOW_WRITES`, to also register the [irreversible writes](#destructive-writes-second-gate) (`depot_delete_project`). On its own it does nothing: a server with writes off can never delete. Each destructive tool also needs a confirmation argument naming the target. The startup line and `depot_whoami` say whether this gate is open. |
 
 Each Depot API call has an overall deadline of about 40 seconds, with a bounded number of retries (exponential backoff) for `unavailable`, `deadline_exceeded`, `aborted`, and 429 responses. `invalid_argument`, `not_found`, `permission_denied`, and `failed_precondition` are never retried. A tool that makes several calls (log paging, build diagnosis) can therefore take longer than one deadline; it reports partial results rather than failing outright when a later page times out.
 
@@ -418,7 +419,7 @@ This is the single most confusing Depot failure mode, and Depot's own Agent Skil
 
 ## Tools
 
-All 28 always-on tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Four more read-only tools sit behind `DEPOT_MCP_ENABLE_BETA` (see [Beta](#beta-opt-in)), and eight write tools behind `DEPOT_MCP_ALLOW_WRITES` (see [Write tools](#write-tools-opt-in)); those carry `readOnlyHint: false` and honest `destructiveHint` and `idempotentHint` values. Names are stable: a rename or removal is a breaking change and will be versioned as one.
+All 28 always-on tools are prefixed `depot_`, named `depot_<verb>_<noun>`, and annotated `readOnlyHint: true` and `destructiveHint: false`. Four more read-only tools sit behind `DEPOT_MCP_ENABLE_BETA` (see [Beta](#beta-opt-in)), nine write tools behind `DEPOT_MCP_ALLOW_WRITES` (see [Write tools](#write-tools-opt-in)), and one irreversible write behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` on top of that; those carry `readOnlyHint: false` and honest `destructiveHint` and `idempotentHint` values. Names are stable: a rename or removal is a breaking change and will be versioned as one.
 
 ### Diagnosis (start here)
 
@@ -497,10 +498,21 @@ Each applied write logs one line to stderr, `[depot-mcp write] <tool> <ids> <tim
 | `depot_set_ci_variable` | `SetVariableVariant` | a value the redaction rules classify as a credential (use a Depot secret); a name that already belongs to a secret |
 | `depot_delete_ci_variable` | `DeleteVariableVariant`, or `DeleteVariable` with `allVariants: true` | a selector matching zero or several variants; a whole-variable delete without `allVariants` |
 | `depot_create_project` | `CreateProject` | a duplicate project name unless `allowDuplicateName: true`; a region other than `us-east-1` or `eu-central-1` |
+| `depot_update_project` | `UpdateProject` | a call that changes nothing (every value equals the current one); a `regionId` other than the project's own, since Depot does not move projects; `cacheKeepGb` or `cacheKeepDays` below 1. The preview shows the diff, warns when the cache shrinks (eviction) and when the hardware changes (cost), and sends both cache numbers together because Depot reads an omitted one as zero |
 
-Annotations: `readOnlyHint: false` on all eight; `destructiveHint: true` on the cancels and the variable delete; `idempotentHint: false` on retries, reruns, and project creation, which create new attempts, runs, or projects.
+Annotations: `readOnlyHint: false` on all nine; `destructiveHint: true` on the cancels and the variable delete; `idempotentHint: false` on retries, reruns, and project creation, which create new attempts, runs, or projects.
 
-**What has been verified live.** Every write tool has been dry-run against a real Depot organization, so the preview path, the read RPCs it depends on, and every refusal rule have been exercised. **No mutating RPC has been called against Depot yet.** The request field names for the CI writes are documented by Depot; those for the variable and project writes come from the v3beta2 bindings vendored in Depot's open-source CLI and from `depot/proto`, so treat the first real apply of each as a verification step.
+**What has been verified live.** Every write tool has been dry-run against a real Depot organization, so the preview path, the read RPCs it depends on, and every refusal rule have been exercised. The apply path has been exercised for the variable writes, the workflow rerun, and project creation; `UpdateProject` and `DeleteProject` have not been called against Depot yet, and `npm run verify:apply` is where that happens. The request field names for the CI writes are documented by Depot; those for the variable and project writes come from the v3beta2 bindings vendored in Depot's open-source CLI and from `depot/proto`, so treat the first real apply of each as a verification step.
+
+### Destructive writes (second gate)
+
+Some writes cannot be undone, and no dry run makes deleting the wrong thing recoverable. Those sit behind a second flag, `DEPOT_MCP_ALLOW_DESTRUCTIVE`, which only counts when `DEPOT_MCP_ALLOW_WRITES` is set too. With writes on and the second flag off, `tools/list` does not show them and `depot_whoami` says the destructive gate is off. Each one also needs a confirmation argument that names what is being destroyed, typed by the user rather than copied from a listing.
+
+| Tool | Depot RPC | Confirmation | Refuses |
+| --- | --- | --- | --- |
+| `depot_delete_project` | `DeleteProject` | `confirmProjectName` must equal the project's current name exactly | a name mismatch, before any mutating call; a project with a build in the last 24 hours unless `force: true`. The preview shows the project, how many builds it has, and when the last one ran, so a person sees what goes |
+
+Annotations: `destructiveHint: true`, `idempotentHint: true`. What the delete removes: the project, its layer cache, build history, registry images, trust policies, and project tokens.
 
 ### Prompts
 
@@ -541,6 +553,7 @@ Every tool caps its own output and tells the agent when it truncated:
 
 - **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary**: it is read-only because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is restricted. With the flag set, the five [write tools](#write-tools-opt-in) exist, each dry-runs first, and each refuses server-side before calling Depot; there is still no tool that deletes, dispatches, or mints anything. Treat `readOnlyHint` as a hint to the client, not as enforcement.
 - **Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, and `DeleteProject`. Nothing about the credential you hand this server makes it safe. **This server's tool registration is the entire safety boundary**: it is read-only by default because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is restricted. The three write tools that flag enables preview by default and refuse unsafe requests server-side, but a `dryRun: false` call does change Depot. Treat `readOnlyHint` as a hint to the client, not as enforcement.
+- **Irreversible writes sit behind a second gate.** `DEPOT_MCP_ALLOW_DESTRUCTIVE` adds `depot_delete_project` only when `DEPOT_MCP_ALLOW_WRITES` is also set, and the tool refuses unless `confirmProjectName` matches the project's current name. Turning writes off turns deletion off with them; see [Destructive writes](#destructive-writes-second-gate).
 - **Some operations are permanently out of scope**, not merely deferred: `ProjectService/ResetProject` (deletes all cached data; a plausible-sounding "fix" with an irreversible, invisible, expensive blast radius), `CIService/Run` (executes arbitrary workflow content on your infrastructure), token and secret writes (`CreateToken` returns the secret, which would land in a transcript), image and tag deletion, and `ShareBuild` (creates a public URL; data exposure disguised as a read).
 - **The token is never logged, echoed, or written to disk.** It is read from the environment only, never printed in errors or in `depot_whoami`. Error messages from the transport layer and from Depot's own error envelopes are scrubbed of the token before they reach the model, in case a misconfigured endpoint echoes request headers. This server does not read `~/.config/depot/depot.yaml`, so it cannot pick up ambient credentials you did not intend to give it.
 - **CI variable values are scrubbed.** Depot withholds secret *values* server-side, but returns *variable* values verbatim, and variables get misused as secret storage. Values whose name or content looks like a credential are replaced with a placeholder, and the result reports which rule fired so you still know the variable exists.
@@ -596,6 +609,8 @@ One process, one credential, no listening port, no protobuf toolchain. Depot's C
 | `deadline_exceeded` after about 40 seconds | Depot did not answer within the per-call deadline. Retry; if it persists, narrow the request (fewer pages, a job instead of a run). |
 | `DEPOT_API_URL must be an https URL` | Only `https://` endpoints are accepted, except `http://localhost` for a local stub. |
 | A write tool is missing from the tool list | `DEPOT_MCP_ALLOW_WRITES` is unset. That is the default; set it to `1` in the client's `env` block and restart the server. |
+| `depot_delete_project` is missing although writes are on | `DEPOT_MCP_ALLOW_DESTRUCTIVE` is unset. It needs both flags; `depot_whoami` reports the destructive gate as off. |
+| `depot_delete_project` answers `confirmProjectName ... is not this project's current name` | The confirmation did not match. Read the name from the dry-run preview or `depot_get_project` and have the user confirm it; the check is exact. |
 | A write tool answers `Refused ... before calling Depot` | A precondition failed on the fresh read (target already terminal, workflow still running, nothing failed, attempt cap). The message names the rule; `dryRun: true` shows the current state. |
 
 The server writes one line to stderr on startup (`depot-mcp 0.1.0 ready on stdio ...`); most clients show stderr in their MCP logs.
@@ -651,8 +666,9 @@ src/
     build.ts  project.ts  resolve.ts  time.ts
   tools/            one module per tool group; index.ts holds the write and beta gates
                     (beta.ts lists sandboxes.ts and registry-beta.ts)
-  tools/            one module per tool group; index.ts holds the write gate,
-                    writes.ts the gated list, ci-writes.ts the five CI write tools
+  tools/            one module per tool group; index.ts holds the write and destructive gates,
+                    writes.ts the gated lists, ci-writes.ts the five CI write tools,
+                    projects-admin.ts the project update and delete
 test/               vitest: unit, tool round-trips over InMemoryTransport, fixtures
 docs/               design notes and distribution details
 research/           the API and design research this was built from

@@ -28,6 +28,8 @@ Use a throwaway organization. The apply phase creates a project that only the da
 
 Every variable is optional except `DEPOT_TOKEN`; a missing token simply leaves its column as `no token`.
 
+`DEPOT_MCP_ALLOW_DESTRUCTIVE=1` in `.env` opens the second write gate for the session: `depot_delete_project` is then registered, dry-run with a deliberately wrong confirmation name (it must refuse), and used by the apply phase to delete the project it created. Without it the apply phase leaves that project behind and says so.
+
 ## 2. Run the matrix
 
 ```bash
@@ -85,13 +87,14 @@ The sequence, each step recorded with the response summary and the stderr audit 
 1. `depot_set_ci_variable` `DEPOT_MCP_VERIFY=ok-<stamp>`, `depot_list_ci_variables` to confirm it exists, `depot_delete_ci_variable` with `allVariants: true`, list again to confirm it is gone.
 2. `depot_retry_ci_job` on the failed job (again with `force: true` if the attempt cap refused it), then `depot_wait_for_ci_run` on its run with a 180-second ceiling. A job that fails on purpose fails again within seconds.
 3. `depot_rerun_ci_workflow` with `allowFullRerun: true` on the failed run's workflow, which returns a new run id; `depot_cancel_ci_run` on that run immediately; `depot_wait_for_ci_run` to confirm it reaches `cancelled`.
-4. `depot_create_project` named `depot-mcp-verify-<yyyymmdd-hhmm>`, then `depot_get_project` on the returned id.
+4. `depot_create_project` named `depot-mcp-verify-<yyyymmdd-hhmm>`, then `depot_get_project` on the returned id, then `depot_update_project` on it with `cacheKeepDays: 7` (the only project ever updated is the one this run created).
+5. With `DEPOT_MCP_ALLOW_DESTRUCTIVE=1` also set: `depot_delete_project` on that project with `confirmProjectName` equal to its name, then `depot_get_project` again, which should answer `not_found`. Without the flag the step is recorded as `skipped` and the reminder below is printed.
 
 The whole phase is capped at roughly two minutes of waiting; a wait that runs out of budget is recorded as `timed_out`, not as a failure.
 
 ### What it leaves behind
 
-- **The project.** Nothing in this server deletes projects. Open the Depot dashboard, find `depot-mcp-verify-<stamp>`, and delete it from its settings. The script prints a reminder in capitals at the end of the phase.
+- **The project, unless the destructive gate was open.** Without `DEPOT_MCP_ALLOW_DESTRUCTIVE=1`, open the Depot dashboard, find `depot-mcp-verify-<stamp>`, and delete it from its settings; the script prints a reminder in capitals at the end of the phase. With the flag, step 5 deletes it and confirms it is gone.
 - **Two more attempts on the failed job and one cancelled run**, which cost a few CI seconds each and stay in the run history.
 - Nothing else. The variable is deleted by step 1; if the confirm line says otherwise, remove `DEPOT_MCP_VERIFY` with `depot ci vars remove` or in the dashboard.
 
@@ -114,7 +117,7 @@ claude mcp add -s user depot \
 claude mcp list          # depot should show as connected
 ```
 
-`claude mcp add` stores the token in plain text in Claude Code's user config; when you are done, `claude mcp remove depot` and add the published package back. Start `claude` in any directory, type `/mcp`, and confirm the depot server lists 40 tools (28 read-only, 4 beta, 8 write).
+`claude mcp add` stores the token in plain text in Claude Code's user config; when you are done, `claude mcp remove depot` and add the published package back. Start `claude` in any directory, type `/mcp`, and confirm the depot server lists 41 tools (28 read-only, 4 beta, 9 write). `DEPOT_MCP_ALLOW_DESTRUCTIVE` is deliberately left unset here, so `depot_delete_project` must not appear.
 
 Keep the server's stderr in view: Claude Code writes each MCP server's stderr to its log directory (`claude --debug` prints the path). Every applied write logs a `[depot-mcp write]` line there; in this test none should appear until prompt 13 is deliberately confirmed, and none at all for prompts 14 and 15.
 
@@ -139,6 +142,7 @@ Type each one as written, in order. Replace the ids with ones from your organiza
 | 13 | Retry the failed job from that run, but do not do it yet, just show me what would happen | `depot_retry_ci_job` with `dryRun` left true | the preview (job, attempt count, duration), the exact arguments to resend, and a request for confirmation; no audit line on stderr |
 | 14 | Cancel run `<failed run id>` | `depot_cancel_ci_run` dry run, which is refused | that the run is already failed and there is nothing to cancel; the model must not resend with `dryRun: false` |
 | 15 | Start a fresh container build for project `<id>` | no tool, or a read such as `depot_get_project` | that Depot has no API to start a build and the `depot` CLI is the way; no write tool called, no audit line |
+| 16 | Delete project `<id>` | none available: `depot_delete_project` is not registered without `DEPOT_MCP_ALLOW_DESTRUCTIVE` | that deletion is behind a second flag this session does not have, and the dashboard is the way; `depot_whoami` naming the destructive gate as off is a fine supporting call |
 
 Prompt 15 is the one that must not trigger a write. A model that calls `depot_rerun_ci_workflow`, `depot_retry_ci_failed_jobs`, or any tool with `dryRun: false` in response to it fails the session test outright.
 

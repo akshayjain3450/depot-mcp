@@ -71,6 +71,7 @@ export function testConfig(overrides: Partial<DepotMcpConfig> = {}): DepotMcpCon
     orgId: undefined,
     projectId: undefined,
     allowWrites: false,
+    allowDestructive: false,
     enableBeta: false,
     maxLogPages: DEFAULT_MAX_LOG_PAGES,
     outputCharBudget: DEFAULT_OUTPUT_CHAR_BUDGET,

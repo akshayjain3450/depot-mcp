@@ -16,8 +16,13 @@ Configuration is read from the environment:
   DEPOT_MCP_OUTPUT_BUDGET  Characters of tool output per call (positive integer).
   DEPOT_MCP_ENABLE_BETA    Also register the read-only sandbox and registry tools built on
                            Depot's beta APIs (depot.sandbox.v1, depot.registry.v1beta1).
-  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the Depot CI write tools (cancel, retry, rerun).
-                           Off by default. Every write defaults to dryRun:true.
+  DEPOT_MCP_ALLOW_WRITES   Set to 1 to register the reversible write tools (cancel, retry, rerun,
+                           CI variables, create and update project). Off by default. Every write
+                           defaults to dryRun:true.
+  DEPOT_MCP_ALLOW_DESTRUCTIVE
+                           Set to 1, together with DEPOT_MCP_ALLOW_WRITES, to also register the
+                           irreversible writes (depot_delete_project). Off by default and no
+                           effect on its own. Each needs a confirmation argument naming the target.
 
 See the README for the MCP client configuration and the full list of tools.
 `;
@@ -45,7 +50,7 @@ async function main(): Promise<void> {
 
   // stdout carries the JSON-RPC stream, so every diagnostic must go to stderr.
   console.error(
-    `${SERVER_NAME} ${SERVER_VERSION} ready on stdio: ${registration.readOnly.length} read-only tool(s), ${registration.beta.length} beta tool(s), ${registration.mutating.length} mutating tool(s).`,
+    `${SERVER_NAME} ${SERVER_VERSION} ready on stdio: ${registration.readOnly.length} read-only tool(s), ${registration.beta.length} beta tool(s), ${registration.mutating.length} mutating tool(s), ${registration.destructive.length} of them destructive.`,
   );
   if (registration.betaEnabled) {
     console.error(
@@ -55,6 +60,11 @@ async function main(): Promise<void> {
   if (registration.writesEnabled) {
     console.error(
       `DEPOT_MCP_ALLOW_WRITES is set: ${registration.mutating.length} mutating tool(s) registered (${registration.mutating.join(', ')}). Each defaults to dryRun:true and changes nothing until called again with dryRun:false; every applied write is logged here as "[depot-mcp write] ...".`,
+    );
+    console.error(
+      registration.destructiveEnabled
+        ? `DEPOT_MCP_ALLOW_DESTRUCTIVE is set: ${registration.destructive.join(', ')} registered. What they delete cannot be restored; each refuses unless its confirmation argument names the target exactly.`
+        : 'DEPOT_MCP_ALLOW_DESTRUCTIVE is not set: no destructive tool (depot_delete_project) is registered.',
     );
   }
 

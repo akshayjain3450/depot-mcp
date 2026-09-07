@@ -9,7 +9,7 @@ Two constraints shape every decision here:
 
 ## Today
 
-28 always-on read-only tools, 4 read-only beta tools behind `DEPOT_MCP_ENABLE_BETA`, 8 write tools behind `DEPOT_MCP_ALLOW_WRITES`, 7 prompts, 4 resources. Everything below is on `main` unless marked otherwise; the 0.1.1 release carries only the first 16 tools and 2 prompts.
+28 always-on read-only tools, 4 read-only beta tools behind `DEPOT_MCP_ENABLE_BETA`, 9 write tools behind `DEPOT_MCP_ALLOW_WRITES`, 1 destructive write behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` on top of that, 7 prompts, 4 resources. Everything below is on `main` unless marked otherwise; the 0.1.1 release carries only the first 16 tools and 2 prompts.
 
 ### Always on
 
@@ -71,6 +71,15 @@ Every write tool defaults to `dryRun: true`, previews from Depot's read RPCs, re
 | `depot_set_ci_variable` | `SetVariableVariant` | a credential-shaped value; a name that belongs to a secret |
 | `depot_delete_ci_variable` | `DeleteVariableVariant`, `DeleteVariable` | a selector matching zero or many variants; a whole-variable delete unless asked |
 | `depot_create_project` | `CreateProject` | a duplicate name unless allowed; an unknown region |
+| `depot_update_project` | `UpdateProject` | no change; a region change (Depot does not move projects); a cache number below 1. Warns on cache shrink and hardware change |
+
+### Destructive writes, behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` as well
+
+Two gates: reversible writes need `DEPOT_MCP_ALLOW_WRITES`; irreversible ones need that plus `DEPOT_MCP_ALLOW_DESTRUCTIVE`, and a confirmation input naming the thing destroyed. The second flag alone registers nothing, so turning writes off always turns deletion off.
+
+| Tool | Depot RPC | Confirmation | Refuses |
+| --- | --- | --- | --- |
+| `depot_delete_project` | `DeleteProject` | `confirmProjectName` equal to the current name | a mismatch; a build in the last 24 hours unless forced. Preview: the project, its build count, its last build time |
 
 Two copies of the write helper exist (`src/lib/write.ts` for the CI writes, `src/lib/write-config.ts` for the variable and project writes); they were built in parallel from the same specification and should be unified in a follow-up.
 
@@ -99,7 +108,6 @@ Deliberately not added: standalone secret and variable getters (the list tools w
 | --- | --- |
 | `CIService/Run` | Accepts inline workflow content: remote code execution on your infrastructure with a billing meter. |
 | `ProjectService/ResetProject` | Destroys all cached data, and to a model looks like "clear the cache to fix my build". |
-| `ProjectService/DeleteProject`, `UpdateProject` | Irreversible, or silently changes cost and evicts cache. Dashboard acts. |
 | Token creation, update, or revocation, on projects or the registry | Mints or revokes long-lived credentials; creation returns the secret into the transcript. |
 | Trust policy add or remove | Grants or revokes an external CI identity's access to a project, the same blast radius as a token. |
 | Secret creation, update, or deletion | Secret values through a model, or unrecoverable deletion of them. |
@@ -117,6 +125,7 @@ Deliberately not added: standalone secret and variable getters (the list tools w
 | 0.1.1 (released) | 16 | 2 | 0 |
 | `main` today, always on | 28 | 7 | 4 |
 | behind `DEPOT_MCP_ENABLE_BETA` | +4 | | |
+| behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` (with writes) | +1 | | |
 | behind `DEPOT_MCP_ALLOW_WRITES` | +8 | | |
 | Still pending | +2 | | |
 
