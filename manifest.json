@@ -3,7 +3,7 @@
   "manifest_version": "0.3",
   "name": "depot-mcp",
   "display_name": "Depot (depot.dev)",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Read-only access to Depot CI failure diagnosis, container build forensics, registry, and usage.",
   "long_description": "Read-only Model Context Protocol server for Depot, the container build and CI acceleration service at depot.dev. Answers \"why did CI fail?\" and \"why did this build fail?\" using Depot's own failure diagnosis, plus run history, cache effectiveness, registry contents, CI configuration, and usage. No tool can change anything in Depot. Community project, not affiliated with Depot.",
   "author": {
