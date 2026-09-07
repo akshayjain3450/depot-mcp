@@ -623,6 +623,8 @@ DEPOT_TOKEN=YOUR_DEPOT_TOKEN npm run smoke
 
 This runs read-only calls only, prints what it found, and reports which checks passed, failed, or were skipped. It skips the failure-diagnosis check if your organization has no failed run to analyse; without one, the flagship tool cannot be exercised.
 
+Before a release, `npm run verify` runs every tool, prompt, and resource against each token kind in `.env` and prints a cross-token matrix; [docs/verification.md](./docs/verification.md) explains the matrix, the opt-in apply run, and the Claude Code session test a human does once per release.
+
 ### Layout
 
 ```

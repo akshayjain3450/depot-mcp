@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Four read-only resources, advertised through `resources/list` and `resources/templates/list`: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, `depot://projects`.
 - `ToolContext` carries an injectable `sleep` and `now`; the test harness advances a virtual clock so polling tests never wait.
 - `scripts/smoke.ts` exercises the new read RPCs; the CI stdio smoke checks the tool count with the beta and write flags on and off.
+- `npm run verify` (`scripts/verify.ts`): release verification against a live organization, one in-process server and MCP client per token kind in `.env`. Calls every registered tool, prompt, and resource, validates structured content against each advertised output schema, dry-runs every write tool, prints a cross-token matrix, and writes a Markdown report to `docs/verification/latest.md` (gitignored). A registered tool without an argument builder in `scripts/verify-scenarios.ts` fails the run, and a unit test enforces the same. `npm run verify:apply` adds the apply scenarios behind a gate (`DEPOT_MCP_VERIFY_APPLY=1`, the Organization token, and `DEPOT_MCP_VERIFY_ORG` equal to the active organization); a fetch wrapper refuses any mutating RPC while the gate is closed. `docs/verification.md` is the session guide, including the Claude Code prompt list and scoring rubric a release needs once per version.
 
 ### Changed
 

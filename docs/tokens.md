@@ -33,10 +33,10 @@ The short version: **use an Organization token.** It runs every tool, including 
 | `depot_list_project_tokens` | yes | **no** (`ProjectService`) |
 | `depot_list_project_usage` | yes | **no** (`UsageService`) |
 | `depot_get_cache_summary` | yes | **no** (projects, builds, and usage) |
-| Beta `depot_list_sandboxes` (`DEPOT_MCP_ENABLE_BETA`) | yes | not tested |
-| Beta `depot_get_sandbox` | yes | not tested |
-| Beta `depot_list_registry_repositories` | yes | not tested |
-| Beta `depot_get_registry_image` | yes | not tested |
+| Beta `depot_list_sandboxes` (`DEPOT_MCP_ENABLE_BETA`) | yes | yes (verified 2026-09-07: an empty list, no error) |
+| Beta `depot_get_sandbox` | yes | expected yes (same `SandboxService`; not exercised, the organization had no sandbox) |
+| Beta `depot_list_registry_repositories` | yes | **no** (`401 Invalid token`, verified 2026-09-07) |
+| Beta `depot_get_registry_image` | yes | **no** (same `depot.registry.v1beta1` service) |
 | `depot_set_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_delete_ci_variable` (write, opt-in) | yes | same as secrets: admins and owners |
 | `depot_create_project` (write, opt-in) | yes | **no** (`ProjectService` refuses user tokens; the dry run fails at `ListProjects`) |
@@ -44,9 +44,9 @@ The short version: **use an Organization token.** It runs every tool, including 
 | Prompt `explain-build-slowness` | yes | **no** (uses projects, builds, and usage) |
 | Write tools (`DEPOT_MCP_ALLOW_WRITES`): `depot_cancel_ci_run`, `depot_cancel_ci_job`, `depot_retry_ci_failed_jobs`, `depot_retry_ci_job`, `depot_rerun_ci_workflow` | dry run verified; apply expected to work (same CI service) | expected to work for both steps, not yet verified |
 
-Project tokens run nothing here: Depot's own scope matrix excludes them from Depot CI and from the API.
+Project tokens run nothing here: Depot's own scope matrix excludes them from Depot CI and from the API. Verified 2026-09-07 with `npm run verify`: every RPC answered `401 Invalid token`, and `depot_whoami` reports the kind as `unknown`.
 
-The beta rows were verified on 2026-09-06 with an Organization token only; the trial organization used for verification had no user token to hand, so the user-token column for those services is unknown rather than known-refused. The beta tools stay behind `DEPOT_MCP_ENABLE_BETA` until that column is filled in.
+The beta rows were verified on 2026-09-06 with an Organization token and on 2026-09-07 with a user token belonging to an organization owner (`npm run verify`, see [verification.md](./verification.md)). The sandbox service accepts both kinds; the registry v1beta1 service refuses user tokens the way the core services do. The beta tools stay behind `DEPOT_MCP_ENABLE_BETA` because their upstream contract is unpublished, not because of the token column.
 ## Write tools
 
 The five write tools call `depot.ci.v1.CIService` only, the same service every CI read tool uses, and that service accepts both token kinds. Their dry-run step (the reads `GetRunStatus`, `GetJob`, `GetWorkflow`) has been verified live with an Organization token. The apply step (`CancelRun`, `CancelWorkflow`, `CancelJob`, `RetryJob`, `RetryFailedJobs`, `RerunWorkflow`) has not been exercised against Depot with either token kind; nothing in Depot's scope matrix suggests it would differ from the reads.
@@ -69,8 +69,8 @@ For anyone extending the server. "Refuses" means Depot answers `401 unauthentica
 | `depot.build.v1.RegistryService` (`ListImages`) | accepts | accepts |
 | `depot.ci.v1.CIService` (runs, logs, metrics, artifacts, diagnosis) | accepts | accepts |
 | `depot.ci.v3beta2` secrets and variables | accepts | accepts for admins and owners; `403` for members |
-| `depot.sandbox.v1.SandboxService` (`ListSandboxes`, `GetSandbox`) | accepts | not tested |
-| `depot.registry.v1beta1.RegistryService` (`ListRepositories`, `ListImages`, `GetImageDetail`, `GetRetentionPolicy`, `ListTokens`) | accepts | not tested |
+| `depot.sandbox.v1.SandboxService` (`ListSandboxes`, `GetSandbox`) | accepts | accepts (`ListSandboxes` verified 2026-09-07) |
+| `depot.registry.v1beta1.RegistryService` (`ListRepositories`, `ListImages`, `GetImageDetail`, `GetRetentionPolicy`, `ListTokens`) | accepts | **refuses** (`ListRepositories` verified 2026-09-07) |
 
 Two consequences follow:
 

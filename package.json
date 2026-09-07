@@ -66,6 +66,8 @@
     "test:watch": "vitest",
     "smoke": "tsx --env-file-if-exists=.env scripts/smoke.ts",
     "smoke:stdio": "node .github/scripts/mcp-smoke.mjs dist/index.js",
+    "verify": "tsx --env-file-if-exists=.env scripts/verify.ts",
+    "verify:apply": "DEPOT_MCP_VERIFY_APPLY=1 tsx --env-file-if-exists=.env scripts/verify.ts",
     "check:metadata": "node .github/scripts/check-metadata.mjs",
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
     "prepublishOnly": "npm run build"
