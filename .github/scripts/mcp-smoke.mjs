@@ -4,6 +4,9 @@
 // No network access is needed: nothing here calls the Depot API.
 //
 // Usage: node .github/scripts/mcp-smoke.mjs [path/to/dist/index.js]
+//
+// Set DEPOT_MCP_ENABLE_BETA=1 to smoke the server with the beta sandbox and registry tools
+// registered as well; the expected tool count grows by BETA_TOOL_COUNT.
 
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -11,8 +14,20 @@ import path from 'node:path';
 import process from 'node:process';
 import { createInterface } from 'node:readline';
 
-const EXPECTED_TOOL_COUNT = 16;
-const EXPECTED_PROMPTS = ['diagnose-latest-failure', 'explain-build-slowness'];
+const BASE_TOOL_COUNT = 28;
+const BETA_TOOL_COUNT = 4;
+const BETA_ENABLED = /^(1|true|yes|on)$/i.test((process.env.DEPOT_MCP_ENABLE_BETA ?? '').trim());
+const EXPECTED_TOOL_COUNT = BASE_TOOL_COUNT + (BETA_ENABLED ? BETA_TOOL_COUNT : 0);
+const BETA_TOOL_PATTERN = /^depot_(list_sandboxes|get_sandbox|list_registry_repositories|get_registry_image)$/;
+const EXPECTED_PROMPTS = [
+  'cache-audit',
+  'compare-ci-runs',
+  'debug-missing-secret',
+  'diagnose-latest-failure',
+  'explain-build-slowness',
+  'triage-failures-today',
+  'watch-run',
+];
 const PROTOCOL_VERSION = '2025-11-25';
 const TIMEOUT_MS = 20_000;
 
@@ -102,6 +117,14 @@ try {
   if (badNames.length > 0) {
     fail(`tool names outside the depot_<verb>_<noun> convention: ${badNames.map((t) => t.name).join(', ')}`);
   }
+  const betaTools = tools.filter((tool) => BETA_TOOL_PATTERN.test(tool.name));
+  if (betaTools.length !== (BETA_ENABLED ? BETA_TOOL_COUNT : 0)) {
+    fail(`expected ${BETA_ENABLED ? BETA_TOOL_COUNT : 0} beta tools (DEPOT_MCP_ENABLE_BETA ${BETA_ENABLED ? 'set' : 'unset'}), got ${betaTools.map((t) => t.name).join(', ') || 'none'}`);
+  }
+  const betaWithoutNotice = betaTools.filter((tool) => !/beta/i.test(tool.description ?? ''));
+  if (betaWithoutNotice.length > 0) {
+    fail(`beta tools whose description does not say so: ${betaWithoutNotice.map((t) => t.name).join(', ')}`);
+  }
 
   const { prompts } = await request('prompts/list');
   const promptNames = (prompts ?? []).map((p) => p.name).sort();
@@ -117,7 +140,7 @@ try {
 
   clearTimeout(timer);
   console.log(
-    `SMOKE OK: ${tools.length} read-only tools, ${promptNames.length} prompts, protocol ${init.protocolVersion}`,
+    `SMOKE OK: ${tools.length} read-only tools (${betaTools.length} beta), ${promptNames.length} prompts, protocol ${init.protocolVersion}`,
   );
   child.kill('SIGTERM');
   await once(child, 'exit');

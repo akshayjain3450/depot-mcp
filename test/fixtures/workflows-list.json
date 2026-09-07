@@ -1,0 +1,41 @@
+{
+  "workflows": [
+    {
+      "workflowId": "wf_2b8e11",
+      "name": "CI",
+      "repo": "acme/api",
+      "status": "failed",
+      "trigger": "push",
+      "runId": "run_7f3d9c21",
+      "sha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+      "headSha": "9c1f4ab7d2e5f60318b4c7a9e0d1f2a3b4c5d6e7",
+      "createdAt": "2026-09-03T14:02:12Z",
+      "jobCounts": { "total": 3, "failed": 1 }
+    },
+    {
+      "workflowId": "wf_1a7d05",
+      "name": "CI",
+      "repo": "acme/api",
+      "status": "finished",
+      "trigger": "pull_request",
+      "runId": "run_6e2c8b10",
+      "sha": "5a5b5c5d5e5f60718293a4b5c6d7e8f901234567",
+      "headSha": "5a5b5c5d5e5f60718293a4b5c6d7e8f901234567",
+      "createdAt": "2026-09-03T11:40:03Z",
+      "jobCounts": { "total": 3, "failed": 0 }
+    },
+    {
+      "workflowId": "wf_0c6b93",
+      "name": "Deploy",
+      "repo": "acme/api",
+      "status": "running",
+      "trigger": "workflow_dispatch",
+      "runId": "run_5d1b7a09",
+      "sha": "0f0e0d0c0b0a09080706050403020100ffeeddcc",
+      "headSha": "0f0e0d0c0b0a09080706050403020100ffeeddcc",
+      "createdAt": "2026-09-03T09:15:01Z",
+      "jobCounts": { "total": 2 }
+    }
+  ],
+  "nextPageToken": "eyJvZmZzZXQiOjN9"
+}

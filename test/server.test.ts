@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { SERVER_NAME, SERVER_VERSION } from '../src/server.js';
-import { mutatingTools, readOnlyTools } from '../src/tools/index.js';
+import { betaTools, mutatingTools, readOnlyTools } from '../src/tools/index.js';
 import { createHarness, type Harness } from './helpers/harness.js';
 
 const PACKAGE_JSON = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'package.json');
@@ -36,8 +36,10 @@ describe('server registration', () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual(
       [...readOnlyTools.map((tool) => tool.name)].sort(),
     );
-    expect(tools).toHaveLength(16);
-    expect(mutatingTools).toHaveLength(0);
+    expect(tools).toHaveLength(28);
+    expect(mutatingTools).toHaveLength(8);
+    expect(tools).toHaveLength(28);
+    expect(mutatingTools).toHaveLength(8);
   });
 
   it('marks every tool read-only and non-destructive', async () => {
@@ -92,19 +94,57 @@ describe('server registration', () => {
     const { tools } = await harness.client.listTools();
 
     for (const tool of tools) {
-      expect(tool.description ?? '', tool.name).not.toHaveLength(0);
+      expect(tool.description ?? '', tool.name).not.toHaveLength(23);
       expect((tool.description ?? '').length, tool.name).toBeGreaterThan(200);
       expect(tool.outputSchema, tool.name).toBeDefined();
       expect(tool.inputSchema, tool.name).toBeDefined();
     }
   });
 
-  it('registers no extra tools when DEPOT_MCP_ALLOW_WRITES is enabled, since v1 ships none', async () => {
+  it('registers exactly the mutating tools on top of the read-only ones when DEPOT_MCP_ALLOW_WRITES is enabled', async () => {
     harness = await createHarness({ routes: {}, config: { allowWrites: true } });
     const { tools } = await harness.client.listTools();
 
-    expect(tools).toHaveLength(readOnlyTools.length);
-    expect(tools.map((tool) => tool.name)).not.toContain('depot_retry_ci_failed_jobs');
+    expect(tools).toHaveLength(readOnlyTools.length + mutatingTools.length);
+    expect(tools.map((tool) => tool.name).sort()).toEqual(
+      [...readOnlyTools, ...mutatingTools].map((tool) => tool.name).sort(),
+    );
+    expect(tools.map((tool) => tool.name)).toContain('depot_retry_ci_failed_jobs');
+  });
+
+  it('names every mutating tool with a verb the read-only check would reject, so a write can never pass as a read', () => {
+    for (const tool of mutatingTools) {
+      const verb = tool.name.replace(/^depot_/, '').split('_')[0] ?? '';
+      expect(MUTATING_WORDS, tool.name).toContain(verb);
+      expect(tool.annotations.readOnlyHint, tool.name).toBe(false);
+    }
+  });
+
+  it('registers no beta tool unless DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({ routes: {} });
+    const { tools } = await harness.client.listTools();
+    const names = tools.map((tool) => tool.name);
+
+    expect(betaTools).toHaveLength(4);
+    for (const tool of betaTools) {
+      expect(names, tool.name).not.toContain(tool.name);
+    }
+  });
+
+  it('registers every beta tool after the read-only set when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    harness = await createHarness({ routes: {}, config: { enableBeta: true } });
+    const { tools } = await harness.client.listTools();
+
+    expect(tools.map((tool) => tool.name)).toEqual([
+      ...readOnlyTools.map((tool) => tool.name),
+      ...betaTools.map((tool) => tool.name),
+    ]);
+    for (const tool of tools) {
+      expect(tool.annotations?.readOnlyHint, tool.name).toBe(true);
+      expect(tool.annotations?.destructiveHint, tool.name).toBe(false);
+      const verb = tool.name.replace(/^depot_/, '').split('_')[0] ?? '';
+      expect(MUTATING_WORDS, tool.name).not.toContain(verb);
+    }
   });
 
   it('registers the diagnostic prompts', async () => {
@@ -112,8 +152,13 @@ describe('server registration', () => {
     const { prompts } = await harness.client.listPrompts();
 
     expect(prompts.map((prompt) => prompt.name).sort()).toEqual([
+      'cache-audit',
+      'compare-ci-runs',
+      'debug-missing-secret',
       'diagnose-latest-failure',
       'explain-build-slowness',
+      'triage-failures-today',
+      'watch-run',
     ]);
   });
 

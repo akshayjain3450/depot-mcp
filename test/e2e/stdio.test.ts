@@ -185,7 +185,7 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     expect(spawned.stderr()).toContain('DEPOT_MCP_MAX_LOG_PAGES must be a positive integer');
   });
 
-  it('answers tools/list with all 16 tools and writes nothing but JSON lines to stdout', async () => {
+  it('answers tools/list with all 28 tools and writes nothing but JSON lines to stdout', async () => {
     const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy-token-e2e' });
     await initialize(spawned);
 
@@ -195,7 +195,7 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     const list = JSON.parse(await reply) as { id?: number; result?: { tools?: unknown[] } };
 
     expect(list.id).toBe(2);
-    expect(list.result?.tools).toHaveLength(16);
+    expect(list.result?.tools).toHaveLength(28);
 
     spawned.child.stdin?.end();
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
@@ -208,10 +208,31 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     }
     expect(spawned.stdout()).not.toContain('dummy-token-e2e');
     expect(spawned.stderr()).not.toContain('dummy-token-e2e');
-    expect(spawned.stderr()).toContain('16 read-only tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).not.toContain('DEPOT_MCP_ENABLE_BETA is set');
   });
 
-  it('warns on stderr that DEPOT_MCP_ALLOW_WRITES has no effect', async () => {
+  it('answers tools/list with 32 tools and names the beta ones on stderr when DEPOT_MCP_ENABLE_BETA is set', async () => {
+    const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy-token-e2e', DEPOT_MCP_ENABLE_BETA: '1' });
+    await initialize(spawned);
+
+    const reply = nextStdoutLine(spawned, 'tools/list response');
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    spawned.child.stdin?.write(`${JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} })}\n`);
+    const list = JSON.parse(await reply) as { result?: { tools?: Array<{ name: string }> } };
+
+    expect(list.result?.tools).toHaveLength(32);
+    expect(list.result?.tools?.map((tool) => tool.name)).toContain('depot_list_sandboxes');
+
+    spawned.child.stdin?.end();
+    const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
+    expect(exit.code).toBe(0);
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 4 beta tool(s), 0 mutating tool(s)');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ENABLE_BETA is set: depot_list_sandboxes');
+    expect(spawned.stderr()).not.toContain('dummy-token-e2e');
+  });
+
+  it('announces the registered write tools on stderr when DEPOT_MCP_ALLOW_WRITES is set', async () => {
     const spawned = spawnServer([], { DEPOT_TOKEN: 'dummy', DEPOT_MCP_ALLOW_WRITES: '1' });
     await initialize(spawned);
 
@@ -219,6 +240,10 @@ describe('dist/index.js over stdio: configuration and protocol details', () => {
     const exit = await withTimeout(spawned.exited, 2_000, 'exit after stdin closed');
 
     expect(exit.code).toBe(0);
-    expect(spawned.stderr()).toContain('no effect');
+    expect(spawned.stderr()).toContain('28 read-only tool(s), 0 beta tool(s), 8 mutating tool(s)');
+    expect(spawned.stderr()).toContain('DEPOT_MCP_ALLOW_WRITES is set: 8 mutating tool(s) registered');
+    expect(spawned.stderr()).toContain('depot_cancel_ci_run');
+    expect(spawned.stderr()).toContain('dryRun:true');
+    expect(spawned.stderr()).not.toContain('dummy');
   });
 });

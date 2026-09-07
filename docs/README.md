@@ -4,7 +4,10 @@ Design notes and distribution details for depot-mcp. The README covers installat
 
 ## Reference
 
-- [`roadmap.md`](./roadmap.md): the 16 tools of today, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
+- [`roadmap.md`](./roadmap.md): the 16 tools of 0.1 and the four added since, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
+- [`roadmap.md`](./roadmap.md): the 19 tools of today, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
+- [`roadmap.md`](./roadmap.md): the 17 tools of today, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
+- [`roadmap.md`](./roadmap.md): the 16 tools of 0.1 and the 0.2 reads shipped since, every Depot RPC not yet exposed with its risk tier, the planned 0.2 read tools and 0.3 write tools, and what is excluded for good.
 - [`tokens.md`](./tokens.md): which Depot token kind can call which tool and which Depot service, verified live, and how to obtain each.
 
 ## Design and research
@@ -36,6 +39,8 @@ Design notes and distribution details for depot-mcp. The README covers installat
 | `.mcp.json.example` | Claude Code project config | Uses `${DEPOT_TOKEN}` expansion so the file is safe to commit. |
 | `Dockerfile`, `.dockerignore` | Docker, Docker MCP Catalog | Multi-stage, distroless runtime, no token baked in. |
 | `.github/scripts/check-metadata.mjs` | CI | Fails if the versions or names above disagree. |
-| `.github/scripts/mcp-smoke.mjs` | CI | Starts `dist/index.js`, performs the handshake, asserts 16 read-only tools. |
+| `.github/scripts/mcp-smoke.mjs` | CI | Starts `dist/index.js`, performs the handshake, asserts 20 read-only tools. |
+| `.github/scripts/mcp-smoke.mjs` | CI | Starts `dist/index.js`, performs the handshake, asserts 19 read-only tools. |
+| `.github/scripts/mcp-smoke.mjs` | CI | Starts `dist/index.js`, performs the handshake, asserts 17 read-only tools. |
 
 Release steps are in [CONTRIBUTING.md](../CONTRIBUTING.md#releasing).

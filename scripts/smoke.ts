@@ -10,12 +10,33 @@ import { ConfigError, loadConfig } from '../src/config.js';
 import { DepotApi } from '../src/depot/api.js';
 import { DepotClient } from '../src/depot/client.js';
 import { DepotApiError, formatDepotError } from '../src/depot/errors.js';
-import { readNumber, readObjectArray, readString, type JsonObject } from '../src/depot/shape.js';
+import {
+  readNumber,
+  readObject,
+  readObjectArray,
+  readString,
+  type JsonObject,
+} from '../src/depot/shape.js';
 import { isBuildFailure, parseBuild, parseBuildStep, selectFailingStep } from '../src/lib/build.js';
-import { isFailureState, parseRunSummary } from '../src/lib/ci-tree.js';
+import {
+  parseAttemptDetail,
+  parseAttempts,
+  parseJobDetail,
+  parseWorkflowContext,
+} from '../src/lib/ci-detail.js';
+import {
+  isFailureState,
+  parseRunSummary,
+  parseRunTree,
+  selectInterestingJob,
+} from '../src/lib/ci-tree.js';
+import { parseWorkflowListEntry } from '../src/lib/ci-workflow.js';
+import { waitForRun } from '../src/lib/ci-wait.js';
 import { parseDiagnosis } from '../src/lib/diagnosis.js';
-import { parseProject } from '../src/lib/project.js';
-import { daysAgoRfc3339 } from '../src/lib/time.js';
+import { parseProject, describeTrustIdentity, parseTrustPolicy } from '../src/lib/project.js';
+import { daysAgoRfc3339, formatDuration } from '../src/lib/time.js';
+import { signedUrlExpiry } from '../src/tools/ci-artifacts.js';
+import { parseProjectUsage } from '../src/lib/usage.js';
 import { ORGANIZATION_TOKEN_NOTE, USER_TOKEN_WARNING } from '../src/tools/whoami.js';
 
 type Status = 'ok' | 'failed' | 'skipped';
@@ -126,6 +147,7 @@ async function main(): Promise<void> {
   }
 
   let failedBuildId: string | undefined;
+  let firstBuildId: string | undefined;
   if (firstProjectId === undefined) {
     record('ListBuilds', 'skipped', 'no project id available');
   } else {
@@ -141,12 +163,52 @@ async function main(): Promise<void> {
         );
       }
       failedBuildId = builds.find((build) => isBuildFailure(build.status))?.buildId;
+      firstBuildId = builds[0]?.buildId;
       return { detail: `${builds.length} build(s) in ${projectId}` };
     });
+
+    if (firstBuildId === undefined) {
+      record('GetBuild', 'skipped', 'no build to fetch');
+    } else {
+      const buildId = firstBuildId;
+      await attempt('GetBuild', async () => {
+        const build = parseBuild(await api.getBuild(buildId));
+        return {
+          detail: `${buildId} ${build.status ?? '?'} in ${formatDuration(build.buildDurationSeconds)}, ${build.cachedSteps ?? 0}/${build.totalSteps ?? 0} cached; depot_get_build is exercisable`,
+        };
+      });
+    }
 
     await attempt('ListImages', async () => {
       const images = readObjectArray(await api.listImages({ projectId, pageSize: 10 }), 'images');
       return { detail: `${images.length} registry image(s) in ${projectId}` };
+    });
+
+    await attempt('ListTrustPolicies', async () => {
+      const policies = readObjectArray(await api.listTrustPolicies(projectId), 'trustPolicies').map(
+        parseTrustPolicy,
+      );
+      for (const policy of policies.slice(0, 5)) {
+        console.log(`         - ${describeTrustIdentity(policy)}`);
+      }
+      return { detail: `${policies.length} OIDC trust policy(ies) on ${projectId}` };
+    });
+
+    await attempt('ListTokens', async () => {
+      const response = await api.listTokens(projectId);
+      const tokens = readObjectArray(response, 'tokens');
+      // Only ids and descriptions are printed; every other field name is reported, never its value.
+      const fieldNames = new Set(tokens.flatMap((token) => Object.keys(token)));
+      for (const token of tokens.slice(0, 5)) {
+        console.log(
+          `         - ${readString(token, 'tokenId', 'id') ?? '?'} ${JSON.stringify(readString(token, 'description') ?? '')}`,
+        );
+      }
+      const unexpected = [...fieldNames].filter((name) => !['tokenId', 'description'].includes(name));
+      if (unexpected.length > 0) {
+        console.log(`         ! fields beyond tokenId/description present (values not shown): ${unexpected.join(', ')}`);
+      }
+      return { detail: `${tokens.length} project token(s) on ${projectId}, metadata only` };
     });
   }
 
@@ -229,6 +291,48 @@ async function main(): Promise<void> {
       return { detail: `${workflows.length} workflow(s) in the run tree` };
     });
 
+    // The run is already terminal, so this must return after one poll without sleeping.
+    await attempt('GetRunStatus polled (depot_wait_for_ci_run, 5s timeout)', async () => {
+      const waited = await waitForRun({
+        api,
+        sleep: (ms) =>
+          new Promise((resolve) => {
+            setTimeout(resolve, ms);
+          }),
+        now: () => Date.now(),
+        runId,
+        timeoutMs: 5_000,
+        pollMs: 2_000,
+      });
+      if (waited.outcome === 'timed_out') {
+        throw new Error(`run ${runId} did not read as terminal within 5s (status ${waited.last.status ?? '?'})`);
+      }
+      return {
+        detail: `outcome=${waited.outcome} status=${waited.last.status ?? '?'} after ${waited.polls} poll(s) in ${waited.elapsedMs}ms`,
+      };
+    });
+
+    await attempt('GetArtifactDownloadURL', async () => {
+      const artifacts = readObjectArray(await api.listArtifacts({ runId, pageSize: 5 }), 'artifacts');
+      const artifactId = artifacts
+        .map((artifact) => readString(artifact, 'artifactId', 'id'))
+        .find((id) => id !== undefined);
+      if (artifactId === undefined) {
+        return { detail: 'run has no artifacts; depot_get_ci_artifact_url not exercised' };
+      }
+      const url = readString(await api.getArtifactDownloadUrl(artifactId), 'downloadUrl', 'url', 'signedUrl');
+      if (url === undefined) {
+        throw new Error(`no download URL in the response for artifact ${artifactId}`);
+      }
+      const expiry = signedUrlExpiry(url, Date.now());
+      // The URL is a bearer capability, so only its host and lifetime are printed.
+      return {
+        detail: `signed URL on ${new URL(url).host}${
+          expiry === undefined ? '' : `, expires in ${expiry.expiresInSeconds}s`
+        } for artifact ${artifactId} (URL not printed)`,
+      };
+    });
+
     await attempt('GetJobAttemptLogs', async () => {
       const workflows = readObjectArray(await api.getRunStatus(runId), 'workflows');
       const jobs = workflows.flatMap((workflow) => readObjectArray(workflow, 'jobs'));
@@ -240,7 +344,64 @@ async function main(): Promise<void> {
       const lines = readObjectArray(response, 'lines');
       return { detail: `${lines.length} log line(s) on the first page of job ${jobId}` };
     });
+
+    // The failed run's tree gives one workflow, job and attempt id for the detail RPCs.
+    const selection = selectInterestingJob(parseRunTree(await api.getRunStatus(runId)));
+    const workflowId = selection?.workflow.workflowId;
+    const jobId = selection?.job.jobId;
+    const attemptId = selection?.attempt?.attemptId;
+
+    if (workflowId === undefined) {
+      record('GetWorkflow', 'skipped', 'no workflow id in the run tree');
+    } else {
+      await attempt('GetWorkflow', async () => {
+        const response = await api.getWorkflow(workflowId);
+        const workflow = parseWorkflowContext(response);
+        const executions = readObjectArray(response, 'executions');
+        const jobs = readObjectArray(response, 'jobs');
+        return {
+          detail: `workflow "${workflow.name ?? '?'}" ${workflow.status ?? '?'}, ${executions.length} execution(s), ${jobs.length} job(s)`,
+        };
+      });
+    }
+
+    if (jobId === undefined) {
+      record('GetJob', 'skipped', 'no job id in the run tree');
+    } else {
+      await attempt('GetJob', async () => {
+        const response = await api.getJob(jobId);
+        const job = parseJobDetail(response);
+        const attempts = parseAttempts(response);
+        return {
+          detail: `job "${job.jobDisplayName ?? job.jobKey ?? '?'}" ${job.status ?? '?'}/${job.conclusion ?? '?'}, ${attempts.length} attempt(s), current ${job.currentAttemptId ?? '?'}`,
+        };
+      });
+    }
+
+    if (attemptId === undefined) {
+      record('GetAttempt', 'skipped', 'no attempt id in the run tree');
+    } else {
+      await attempt('GetAttempt', async () => {
+        const response = await api.getAttempt(attemptId);
+        const detail = parseAttemptDetail(readObject(response, 'attempt') ?? {});
+        return {
+          detail: `attempt ${detail.attempt ?? '?'} ${detail.status ?? '?'}/${detail.conclusion ?? '?'}, sandbox ${detail.sandboxId ?? '?'}, current=${detail.isCurrent ?? '?'}`,
+        };
+      });
+    }
   }
+
+  await attempt('ListWorkflows', async () => {
+    const workflows = readObjectArray(await api.listWorkflows({ pageSize: 10 }), 'workflows').map(
+      parseWorkflowListEntry,
+    );
+    for (const workflow of workflows.slice(0, 5)) {
+      console.log(
+        `         - ${workflow.workflowId ?? '?'} ${workflow.name ?? '?'} ${workflow.status ?? '?'} ${workflow.runId ?? '?'} jobs=${JSON.stringify(workflow.jobCounts)}`,
+      );
+    }
+    return { detail: `${workflows.length} workflow(s) with no status filter` };
+  });
 
   console.log('');
   console.log('CI configuration (names and scoping only)');
@@ -270,6 +431,19 @@ async function main(): Promise<void> {
     return {
       detail: `${builds.length} build row(s), ${runners.length} runner repo(s), ${storage.length} storage row(s), ${savedMinutes} min saved by cache in 7 days`,
     };
+  });
+
+  await attempt('ListProjectUsage', async () => {
+    const rows = readObjectArray(
+      await api.listProjectUsage({ startAt: daysAgoRfc3339(30), endAt: new Date().toISOString() }),
+      'usage',
+    ).map(parseProjectUsage);
+    for (const row of rows.slice(0, 5)) {
+      console.log(
+        `         - ${row.projectId ?? '?'} ${row.buildCount ?? 0} build(s), ${row.buildDurationSeconds ?? 0}s, cache ${row.layerCacheSizeGb ?? 0} GB`,
+      );
+    }
+    return { detail: `${rows.length} project usage row(s) in 30 days` };
   });
 
   summarise();

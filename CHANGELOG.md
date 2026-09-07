@@ -6,7 +6,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- Twelve read-only tools, bringing the always-on total to 28, all verified live on 2026-09-06 against a trial organization:
+  - Depot CI: `depot_get_ci_job`, `depot_get_ci_attempt`, `depot_list_ci_workflows`, `depot_get_ci_workflow`, `depot_wait_for_ci_run` (bounded polling of `GetRunStatus`, never a stream), `depot_get_ci_artifact_url` (short-lived signed URL, never fetched), `depot_compare_ci_runs` (job, duration, memory, and failure-fingerprint deltas between two runs).
+  - Builds, projects, usage: `depot_get_build`, `depot_list_project_usage`, `depot_get_cache_summary`, `depot_audit_trust_policies`, `depot_list_project_tokens` (metadata only; output fields are allowlisted so no secret material can pass through).
+- Four read-only tools behind `DEPOT_MCP_ENABLE_BETA`, built on Depot APIs published only as protos or in private beta: `depot_list_sandboxes`, `depot_get_sandbox`, `depot_list_registry_repositories`, `depot_get_registry_image`. Every RPC accepted an Organization token live; the user-token column is untested, which is why they stay gated.
+- Eight write tools behind `DEPOT_MCP_ALLOW_WRITES`, absent from `tools/list` otherwise: `depot_cancel_ci_run`, `depot_cancel_ci_job`, `depot_retry_ci_failed_jobs`, `depot_retry_ci_job`, `depot_rerun_ci_workflow`, `depot_set_ci_variable`, `depot_delete_ci_variable`, `depot_create_project`. Each defaults to `dryRun: true`, previews from Depot's read RPCs, refuses unsafe preconditions before any mutating RPC, logs one audit line to stderr per applied write, and carries honest `destructiveHint` and `idempotentHint` values. All dry-run paths verified live; no mutating RPC has been called against Depot yet.
+- Five prompts (`triage-failures-today`, `compare-ci-runs`, `cache-audit`, `debug-missing-secret`, `watch-run`) with sanitised, quoted arguments, bringing the total to seven.
+- Four read-only resources, advertised through `resources/list` and `resources/templates/list`: `depot://ci/run/{runId}`, `depot://ci/runs/failed`, `depot://project/{projectId}/builds`, `depot://projects`.
+- `ToolContext` carries an injectable `sleep` and `now`; the test harness advances a virtual clock so polling tests never wait.
+- `scripts/smoke.ts` exercises the new read RPCs; the CI stdio smoke checks the tool count with the beta and write flags on and off.
+
+### Changed
+
+- `depot_whoami` reports the real count and names of registered write tools (`mutatingToolsAvailable`, `mutatingTools`) and whether beta tools are enabled; the startup banner counts read-only, beta, and mutating tools and names the write tools when the flag is set.
+- `depot_list_builds` shows the cache hit ratio as a percentage next to the cached step count.
+- Push-triggered Depot CI run ids (`ps_` prefix) are recognised by the loose-id tools.
+
+### Fixed
+
+- `depot_get_usage` with `projectId` reported every number as unknown: Depot nests the `GetProjectUsage` record under `usage`.
+
+### Not verified live
+
+- The apply path of every write tool. The variable and project write request shapes are inferred from Depot's CLI bindings and `depot/proto` and are documented as assumptions in the tool descriptions.
+- Beta tools with a user token.
 
 ## [0.1.1] - 2026-09-06
 

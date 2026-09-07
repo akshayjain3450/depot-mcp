@@ -1,0 +1,76 @@
+{
+  "orgId": "org_1a2b3c",
+  "runId": "run_7f3d9c21",
+  "repo": "acme/api",
+  "ref": "refs/heads/main",
+  "sha": "9f8e7d6c5b4a3928170615f4e3d2c1b0a9f8e7d6",
+  "headSha": "9f8e7d6c5b4a3928170615f4e3d2c1b0a9f8e7d6",
+  "trigger": "push",
+  "runStatus": "failed",
+  "runCreatedAt": "2026-09-05T14:02:11Z",
+  "runStartedAt": "2026-09-05T14:02:12Z",
+  "runFinishedAt": "2026-09-05T14:09:40Z",
+  "workflowId": "wf_2b8e11",
+  "workflowName": "CI",
+  "workflowStatus": "failed",
+  "workflowCreatedAt": "2026-09-05T14:02:12Z",
+  "workflowStartedAt": "2026-09-05T14:02:13Z",
+  "workflowFinishedAt": "2026-09-05T14:09:39Z",
+  "executions": [
+    {
+      "executionId": "exe_0001",
+      "execution": 1,
+      "status": "failed",
+      "createdAt": "2026-09-05T14:02:12Z",
+      "startedAt": "2026-09-05T14:02:13Z",
+      "finishedAt": "2026-09-05T14:09:39Z"
+    }
+  ],
+  "jobs": [
+    {
+      "jobId": "job_1c9f30",
+      "jobKey": "lint",
+      "status": "finished",
+      "startedAt": "2026-09-05T14:02:20Z",
+      "finishedAt": "2026-09-05T14:03:10Z",
+      "attempts": [
+        {
+          "attemptId": "att_11aa01",
+          "attempt": 1,
+          "status": "finished",
+          "startedAt": "2026-09-05T14:02:20Z",
+          "finishedAt": "2026-09-05T14:03:10Z"
+        }
+      ]
+    },
+    {
+      "jobId": "job_4d0a77",
+      "jobKey": "test (18)",
+      "status": "failed",
+      "startedAt": "2026-09-05T14:05:00Z",
+      "finishedAt": "2026-09-05T14:09:39Z",
+      "attempts": [
+        {
+          "attemptId": "att_80ab00",
+          "attempt": 1,
+          "status": "failed",
+          "startedAt": "2026-09-05T14:02:20Z",
+          "finishedAt": "2026-09-05T14:04:50Z"
+        },
+        {
+          "attemptId": "att_91bc02",
+          "attempt": 2,
+          "status": "failed",
+          "startedAt": "2026-09-05T14:05:00Z",
+          "finishedAt": "2026-09-05T14:09:39Z"
+        }
+      ]
+    },
+    {
+      "jobId": "job_7e5b21",
+      "jobKey": "deploy",
+      "status": "skipped",
+      "attempts": []
+    }
+  ]
+}

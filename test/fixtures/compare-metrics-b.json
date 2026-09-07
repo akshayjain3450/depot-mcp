@@ -1,0 +1,91 @@
+{
+  "run": {
+    "runId": "run_cmp_b",
+    "repo": "acme/api",
+    "sha": "ffff6666aaaa7777bbbb8888cccc9999dddd0000",
+    "status": "failed",
+    "startedAt": "2026-09-05T11:00:04.200Z",
+    "finishedAt": "2026-09-05T11:03:34.900Z"
+  },
+  "workflows": [
+    {
+      "workflow": { "workflowId": "wf_cmp_b", "name": "ci", "status": "failed" },
+      "jobs": [
+        {
+          "job": {
+            "jobId": "job_b_lint",
+            "jobKey": "ci.yml:lint",
+            "status": "finished",
+            "conclusion": "success",
+            "startedAt": "2026-09-05T11:00:10Z",
+            "finishedAt": "2026-09-05T11:00:31Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_b_lint_1", "attempt": 1, "status": "finished" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 4, "peakMemoryUtilization": 0.11, "averageMemoryUtilization": 0.08 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_b_test",
+            "jobKey": "ci.yml:test",
+            "status": "finished",
+            "conclusion": "success",
+            "startedAt": "2026-09-05T11:00:10Z",
+            "finishedAt": "2026-09-05T11:01:40Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_b_test_1", "attempt": 1, "status": "finished" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 18, "peakMemoryUtilization": 0.4, "averageMemoryUtilization": 0.29 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_b_build",
+            "jobKey": "ci.yml:build",
+            "status": "failed",
+            "conclusion": "failure",
+            "startedAt": "2026-09-05T11:01:45Z",
+            "finishedAt": "2026-09-05T11:03:00Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_b_build_1", "attempt": 1, "status": "failed" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_NO_SAMPLES", "reason": "no_samples" },
+              "stats": {}
+            },
+            {
+              "attempt": { "attemptId": "att_b_build_2", "attempt": 2, "status": "failed" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 15, "peakMemoryBytes": "2415919104", "peakMemoryUtilization": 0.28 }
+            }
+          ]
+        },
+        {
+          "job": {
+            "jobId": "job_b_docs",
+            "jobKey": "ci.yml:docs",
+            "status": "finished",
+            "conclusion": "success",
+            "startedAt": "2026-09-05T11:03:05Z",
+            "finishedAt": "2026-09-05T11:03:15Z"
+          },
+          "attempts": [
+            {
+              "attempt": { "attemptId": "att_b_docs_1", "attempt": 1, "status": "finished" },
+              "availability": { "code": "CI_METRICS_AVAILABILITY_CODE_AVAILABLE", "reason": "available" },
+              "stats": { "sampleCount": 2, "peakMemoryUtilization": 0.05 }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "snapshotAt": "2026-09-05T12:00:01Z"
+}
