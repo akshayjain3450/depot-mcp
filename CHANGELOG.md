@@ -6,7 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- The verification script's final apply check counted its own success as a failure: after `depot_delete_project`, `GetProject` answering `not_found` is the expected result, but it was recorded under the Depot-error kind and turned an otherwise clean `verify:apply` run into `FAIL`. It is now recorded as `ok`; a project that is still readable after the delete is recorded as an error, and error outcomes now count as failures.
 
 ## [0.2.1] - 2026-09-08
 
