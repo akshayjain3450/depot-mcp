@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.1] - 2026-09-08
+
+Findings from the first Claude Code session test.
+
 ### Changed
 
 - Server instructions and the build tool description tell the model not to route around a missing capability: when this server cannot start a build or a write's flag is off, say so and stop, rather than running the `depot` CLI, reading credentials out of client configuration, or using another tool. Found by the first Claude Code session test (`docs/verification.md`).
@@ -129,7 +135,8 @@ First release.
 - Untrusted CI content (logs, summaries, Depot's AI diagnosis and suggested fix) is fenced and labelled in tool summaries, and the server instructions tell the model to treat it as data.
 - Credential redaction rewritten: unanchored vendor patterns (GitHub, GitLab, AWS, Google, Slack, Stripe, OpenAI, Anthropic, npm, PyPI, Docker Hub, Vault, Depot, JWT, Bearer/Basic, PEM), structural rules (`user:pass@` URLs, `password=`-style fragments), a length rule, and a windowed entropy rule that no longer over-redacts URLs, paths, image references, semver strings, or git SHAs. Name matching is segment-based, so `AUTHOR_NAME` and `CERT_PATH` are no longer redacted while `DB_PASS` and `SLACK_WEBHOOK` are.
 
-[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/akshayjain3450/depot-mcp/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/akshayjain3450/depot-mcp/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/akshayjain3450/depot-mcp/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/akshayjain3450/depot-mcp/releases/tag/v0.1.0
