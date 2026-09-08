@@ -837,13 +837,16 @@ async function runApplyScenarios(session: Session, d: Discovery, record: Recorde
   );
   const afterDelete = await invoke(session, 'depot_get_project', { projectId });
   const goneOutcome = classify(afterDelete);
-  record('apply confirm project gone', {
-    ...goneOutcome,
-    note:
-      goneOutcome.kind === 'depot' && goneOutcome.code === 'not_found'
-        ? 'GetProject answers not_found, as a deleted project should'
-        : `expected not_found after delete; ${goneOutcome.note}`,
-  });
+  // Here not_found is the success: the project must be gone. Anything else (still readable,
+  // some other Depot error, a crash) keeps its own kind and is judged as usual.
+  record(
+    'apply confirm project gone',
+    goneOutcome.kind === 'depot' && goneOutcome.code === 'not_found'
+      ? { kind: 'ok', note: 'GetProject answers not_found, as a deleted project should' }
+      : goneOutcome.kind === 'ok'
+        ? { kind: 'error', note: `project still readable after delete; ${goneOutcome.note}` }
+        : { ...goneOutcome, note: `expected not_found after delete; ${goneOutcome.note}` },
+  );
   if (deleted.isError) {
     say('');
     say(`*** REMINDER: the delete was refused or failed; remove "${projectName}" (${projectId}) in the Depot dashboard. ***`);
@@ -961,7 +964,7 @@ const EXPECTED_DENIALS: ReadonlySet<string> = new Set(['unauthenticated', 'permi
 
 function isFailure(report: TokenReport, scenario: Scenario): boolean {
   const { kind, code } = scenario.outcome;
-  if (kind === 'crashed' || kind === 'schema' || kind === 'missing') {
+  if (kind === 'crashed' || kind === 'schema' || kind === 'missing' || kind === 'error') {
     return true;
   }
   if (kind === 'depot') {
