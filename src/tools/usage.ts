@@ -333,7 +333,7 @@ Organization token only. Defaults to the last 30 days; Depot pages long lists, s
     } else {
       const idWidth = Math.max(...projects.map((row) => row.projectId.length));
       for (const row of projects) {
-        const label = row.name === undefined ? '' : ` (${row.name})`;
+        const label = row.name === undefined ? ' (name not visible: deleted, or outside this token)' : ` (${row.name})`;
         text.push(
           `  ${row.projectId.padEnd(idWidth)}${label}  builds ${row.buildCount ?? '?'}  build time ${row.buildDurationSeconds === undefined ? '?' : formatDuration(row.buildDurationSeconds)}  cache ${row.layerCacheSizeGb ?? '?'} GB`,
         );
