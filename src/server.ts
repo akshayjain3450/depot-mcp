@@ -60,7 +60,7 @@ export function createServer(options: CreateServerOptions): CreatedServer {
     { name: SERVER_NAME, version: SERVER_VERSION },
     {
       instructions: [
-        'Read-only access to depot.dev: Depot CI runs and failures, container build history, projects, registry images, CI configuration, and usage.',
+        'Access to depot.dev, read-only unless DEPOT_MCP_ALLOW_WRITES is set: Depot CI runs and failures, container build history, projects, registry images, CI configuration, and usage.',
         '',
         'For any "why did this fail" question, call depot_diagnose_ci_failure (Depot CI) or depot_diagnose_build (container builds) before fetching logs. Both return a bounded, pre-analysed result; raw logs are the fallback, not the first step.',
         'If a list comes back empty or a call is denied, call depot_whoami — the usual cause is a token that spans several organizations without DEPOT_ORG_ID set.',

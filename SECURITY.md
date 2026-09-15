@@ -15,7 +15,7 @@ Problems in Depot's own service or API belong with Depot: https://depot.dev/docs
 Anything that lets this server:
 
 - expose the Depot token (in a tool result, an error message, stderr, a file, or a crash dump);
-- mutate anything in Depot, since every tool is meant to be read-only;
+- mutate anything in Depot without `DEPOT_MCP_ALLOW_WRITES` set, or through a write tool without a `dryRun: false` call that passed its refusal rules;
 - return CI variable values that the redaction rules should have caught;
 - exceed its output budget in a way that could exhaust a client's context or memory;
 - be tricked by content from Depot (log lines, variable values, diagnosis text) into doing something other than returning that content.
@@ -24,7 +24,7 @@ Prompt injection through log content is a real concern: CI logs are attacker-inf
 
 ## The token caveat you must understand
 
-**Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, `ResetProject`, and `DeleteProject`. Nothing about the credential you give this server limits what it could do. The server is read-only because it registers no mutating tool, not because the token is restricted.
+**Depot has no read-only token scope.** An Organization token that can call `ListRuns` can also call `CancelRun`, `RerunWorkflow`, `ResetProject`, and `DeleteProject`. Nothing about the credential you give this server limits what it could do. The server is read-only by default because it registers no mutating tool unless `DEPOT_MCP_ALLOW_WRITES` is set, not because the token is restricted.
 
 Consequences:
 

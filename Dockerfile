@@ -13,7 +13,7 @@ RUN npm run build && npm prune --omit=dev
 
 FROM gcr.io/distroless/nodejs20-debian12:nonroot
 LABEL org.opencontainers.image.title="depot-mcp" \
-      org.opencontainers.image.description="Read-only MCP server for Depot (depot.dev): CI failure diagnosis, build forensics, usage" \
+      org.opencontainers.image.description="MCP server for Depot (depot.dev): CI failure diagnosis, build forensics, usage; read-only by default" \
       org.opencontainers.image.source="https://github.com/akshayjain3450/depot-mcp" \
       org.opencontainers.image.licenses="Apache-2.0 with Commons Clause 1.0 (see LICENSE)" \
       org.opencontainers.image.vendor="Community project, not affiliated with Depot"

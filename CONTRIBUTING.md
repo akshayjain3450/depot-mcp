@@ -4,7 +4,7 @@ Thanks for looking. This is a community project, not a Depot product, and it is 
 
 ## Ground rules
 
-1. **Read-only is the product.** Depot has no read-only token scope, so this server's tool registration is the entire safety boundary. A pull request that adds a tool able to retry, cancel, rerun, dispatch, reset, delete, share, or mint anything will not be merged into the default tool set. If you want to propose a mutating tool, it must live in `mutatingTools` in `src/tools/index.ts`, be gated by `DEPOT_MCP_ALLOW_WRITES`, carry honest `destructiveHint` and `idempotentHint` annotations, and be discussed in an issue first. Some operations are permanently out of scope regardless; see the Security section of the README.
+1. **Read-only by default is the product.** Depot has no read-only token scope, so this server's tool registration is the entire safety boundary. A pull request that adds a tool able to retry, cancel, rerun, dispatch, reset, delete, share, or mint anything will not be merged into the default tool set. If you want to propose a mutating tool, it must live in `mutatingTools` in `src/tools/index.ts`, be gated by `DEPOT_MCP_ALLOW_WRITES`, carry honest `destructiveHint` and `idempotentHint` annotations, and be discussed in an issue first. Some operations are permanently out of scope regardless; see the Security section of the README.
 2. **The token never leaves the process.** Never log it, never put it in an error, never return it from a tool, never read it from anywhere but the environment.
 3. **Every result is bounded.** Anything that can grow with log volume must respect `DEPOT_MCP_OUTPUT_BUDGET` and say when it truncated.
 4. **stdout is the protocol.** Diagnostics go to stderr. `console.log` is a lint error in `src/` for this reason.
