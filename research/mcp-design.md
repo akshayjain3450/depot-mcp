@@ -1,5 +1,7 @@
 # Depot MCP server — fit assessment and proposed design
 
+> **Addendum, 2026-09-21.** Three conclusions below have moved. First, `ProjectService/{Create,Update,Delete}Project` is no longer excluded: all three ship as gated write tools, delete behind a second flag with a typed project name. Second, the tool-count reasoning has changed, because Claude Code, Codex and Cursor now withhold tool definitions and load them by keyword search, which makes descriptions matter more than the count in those clients. Third, the 2026-07-28 revision and SDK v2 are now the migration target rather than a future possibility, and SDK 1.x is supported only until about January 2027. See [`../docs/next-releases.md`](../docs/next-releases.md).
+
 Research date: **2026-09-04**. All MCP versions, protocol revisions and SDK APIs below were verified live against modelcontextprotocol.io, the npm registry, and by unpacking and grepping the published `@modelcontextprotocol/server@2.0.0` and `@modelcontextprotocol/client@2.0.0` tarballs. Depot facts reference the companion report, [`depot-api-surface.md`](./depot-api-surface.md).
 
 ## 1. Verdict up front
@@ -215,7 +217,7 @@ Not shipped, at least not in v1:
 | Excluded | Why |
 | --- | --- |
 | `CIService/Run` | Accepts arbitrary `workflowContent[]`. An agent that can author and execute CI workflows on your infrastructure is remote code execution with a billing meter. If ever added: separate env flag, and require `workflow` by path rather than inline content |
-| `ProjectService/{Create,Update,Delete}Project` | Delete is irreversible and admin-only; create/update are rare, deliberate, low-value-to-automate acts better done in the dashboard |
+| ~~`ProjectService/{Create,Update,Delete}Project`~~ | **Superseded.** All three ship as write tools behind `DEPOT_MCP_ALLOW_WRITES`, with delete behind `DEPOT_MCP_ALLOW_DESTRUCTIVE` as well and refusing unless the caller types the project's current name |
 | **`ProjectService/ResetProject`** | Terminates all machines and **deletes all cached data**. Catastrophic-if-wrong, silently expensive (every subsequent build is a cold build), and indistinguishable to a model from "clear the cache to fix my flaky build" |
 | `ProjectService/{Create,Update,Delete}Token`, `registry.v1beta1` token RPCs | Mints long-lived credentials. `CreateToken` returns the secret in the response, so it would land in a transcript |
 | `SecretService/{Create,Set,Update,Delete}*` | Writing secrets through a model means secret values in the conversation |

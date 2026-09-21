@@ -2,6 +2,13 @@
 
 Research date: **2026-09-04**. Everything below was verified live against Depot's docs, the `depot/proto` repo, the `depot/cli` source at commit on `main` as of 2026-09-02, and npm/BSR metadata. Nothing here is from training data.
 
+> **Addendum, 2026-09-21.** Four things in this file are now out of date; the body below is otherwise still accurate. The consequences for the tool surface are tracked in [`../docs/next-releases.md`](../docs/next-releases.md).
+>
+> 1. **`depot.sandbox.v1.SandboxService` is missing from this survey.** It backs four shipped tools. This file knows sandboxes only as the internal `depot.agent.v1` service and the private-beta `depot/sandbox-sdk`. Do not treat section 3 to 6 as a complete coverage baseline without it.
+> 2. **The project contract changed on 2026-09-08** ([`depot/proto` d3629e2](https://github.com/depot/proto/commit/d3629e2)): new `ResetProjectMachines`, `UpdateTrustPolicy`, `GetRegistryRetentionPolicy` and `UpdateRegistryRetentionPolicy`; new `buildTimeoutMinutes` and `maxConcurrentBuilds` project fields; `ListTrustPolicies` now paginates and filters by provider; `CachePolicy.keepBytes` is deprecated in favour of `keepGb`, bounded 25 to 1000, with `keepDays` bounded 1 to 30. `CreateProject` now returns the existing active project when the name already exists, rather than creating a duplicate.
+> 3. **Depot CI gained a `Forge` enum with `FORGE_ORIGIN`** (2026-08-21), so a run need not come from GitHub. No other CI proto has changed since then.
+> 4. **`github.com/depot/api` now returns 404.** The public protos live at <https://github.com/depot/proto>; the Buf module is still named `buf.build/depot/api`. Depot CI, sandbox, test-result and cache protos are vendored in `depot/cli` and `depot/sandbox-sdk` rather than published there.
+
 ## 0. Executive summary of the surface
 
 Depot exposes **three overlapping layers**:

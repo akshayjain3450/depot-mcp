@@ -30,6 +30,7 @@ A [Model Context Protocol](https://modelcontextprotocol.io) server, read-only by
 - [Development](#development)
 - [Contributing](#contributing)
 - [Roadmap](./docs/roadmap.md)
+- [Plan for the next releases](./docs/next-releases.md)
 - [License](#license)
 
 ## Why this exists
@@ -400,9 +401,7 @@ Every setting is an environment variable, set in your client's config.
 | `DEPOT_MCP_MAX_LOG_PAGES` | no | `20` | Cap on log/step pages fetched per tool call, so one call can't walk a gigabyte of logs. |
 | `DEPOT_MCP_OUTPUT_BUDGET` | no | `24000` | Hard character ceiling on any single tool result. |
 | `DEPOT_MCP_ENABLE_BETA` | no | `0` | Also register the four read-only [beta tools](#beta-opt-in) for Depot sandboxes and the Depot registry. Off by default because their Depot APIs may change without notice. `depot_whoami` reports whether it is on. |
-| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | **Reserved for a future version; currently a no-op.** The gate exists so mutating tools can be added later without reworking registration. v1 defines none, so setting this changes nothing; `depot_whoami` will say so. |
-| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the five Depot CI [write tools](#write-tools-opt-in). Unset, they are not registered at all, so `tools/list` never shows them. Every write defaults to `dryRun: true`; `depot_whoami` reports which write tools are registered. |
-| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the [write tools](#write-tools-opt-in). Every one defaults to `dryRun: true`; a client without the flag never sees them. The startup line on stderr and `depot_whoami` both say whether writes are on. |
+| `DEPOT_MCP_ALLOW_WRITES` | no | `0` | Set to `1` to register the [write tools](#write-tools-opt-in). Unset, they are not registered at all, so `tools/list` never shows them. Every one defaults to `dryRun: true`. The startup line on stderr and `depot_whoami` both report which write tools are registered. |
 | `DEPOT_MCP_DISPATCH_ALLOWLIST` | no | | Comma-separated `owner/name:workflow.yml` entries that `depot_dispatch_ci_workflow` may start, for example `acme/api:deploy.yml,acme/api:nightly.yml`. When set, a dispatch of anything else is refused before any request; when unset, any repository the token can see may be dispatched. Repository names match case-insensitively, workflow file names exactly. A malformed entry stops the server at startup. |
 | `DEPOT_MCP_ALLOW_DESTRUCTIVE` | no | `0` | Set to `1`, together with `DEPOT_MCP_ALLOW_WRITES`, to also register the [irreversible writes](#destructive-writes-second-gate) (`depot_delete_project`). On its own it does nothing: a server with writes off can never delete. Each destructive tool also needs a confirmation argument naming the target. The startup line and `depot_whoami` say whether this gate is open. |
 
@@ -569,7 +568,7 @@ How clients treat the annotations differs: Claude Desktop uses `readOnlyHint` fo
 - **`depot_get_ci_metrics` returns Depot's raw document alongside the fields it recognises**, because Depot documents that these RPCs return CPU and memory summaries without publishing their field names.
 - **`depot.ci.v3beta2` is beta in its name.** The secrets and variables tools are the most breakage-prone. Their list filters are undocumented, so filtering happens in this server and the request sent to Depot is empty.
 - **No log streaming.** Depot caps concurrent log streams per token *and per organization*, and a careless streaming tool could exhaust that for your whole org, including your real CI. This server polls the unary `GetJobAttemptLogs` instead, which Depot's docs explicitly bless.
-- **There is no `wait_for_run_to_finish` tool**, deliberately. Long polls fit badly inside a tool-call timeout. Ask for status again instead; the agent can poll across turns.
+- **Waiting on a run is bounded, never a stream.** `depot_wait_for_ci_run` polls `GetRunStatus` at a bounded interval up to a bounded timeout and then returns what it saw, because an open-ended poll fits badly inside a tool-call timeout. For anything longer, ask again; the agent can poll across turns.
 
 ## Architecture
 

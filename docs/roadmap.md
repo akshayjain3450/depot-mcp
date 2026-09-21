@@ -6,6 +6,7 @@ Two constraints shape every decision here:
 
 - **Depot has no read-only token.** Any token that can list runs can also cancel them and delete projects. The tool list is the only safety boundary, so every write is opt-in and every irreversible operation is excluded outright.
 - **Tool count has a cost.** Every tool's name and description is sent to the model on every request. Past roughly forty tools, models choose worse and each call costs more. The always-on surface therefore stays under thirty, with the gated tools invisible unless enabled.
+  - Updated 2026-09-21: Claude Code, Codex and Cursor now withhold tool definitions and load them by keyword search, so in those clients the count is no longer the binding cost and descriptions are what decide whether a tool is found. VS Code still caps a request at 128 tools, and clients without tool search still pay for every schema, so the ceiling stays until that is no longer true. See [`next-releases.md`](./next-releases.md).
 
 ## Today
 
@@ -59,7 +60,7 @@ Probed and accepted but not exposed: `RegistryService/ListImages` (needs a `repo
 
 ### Writes, behind `DEPOT_MCP_ALLOW_WRITES`
 
-Every write tool defaults to `dryRun: true`, previews from Depot's read RPCs, refuses unsafe preconditions before any mutating RPC, and logs one audit line to stderr per applied write. All dry-run paths are verified live; **no mutating RPC has been called against Depot yet.**
+Every write tool defaults to `dryRun: true`, previews from Depot's read RPCs, refuses unsafe preconditions before any mutating RPC, and logs one audit line to stderr per applied write. All dry-run paths are verified live. Every write except `depot_stop_sandbox` and `depot_kill_sandbox` was applied for real against the trial organization on 2026-09-08 (`docs/verification/apply-0.2.1.md`); those two have only been dry-run, because the trial organization had no sandbox to act on.
 
 | Tool | Depot RPC | Refuses |
 | --- | --- | --- |
@@ -84,7 +85,7 @@ Two gates: reversible writes need `DEPOT_MCP_ALLOW_WRITES`; irreversible ones ne
 | --- | --- | --- | --- |
 | `depot_delete_project` | `DeleteProject` | `confirmProjectName` equal to the current name | a mismatch; a build in the last 24 hours unless forced. Preview: the project, its build count, its last build time |
 
-Two copies of the write helper exist (`src/lib/write.ts` for the CI writes, `src/lib/write-config.ts` for the variable and project writes); they were built in parallel from the same specification and should be unified in a follow-up.
+All write tools share one helper, `src/lib/write.ts`. The earlier `write-config.ts` was folded into it before 0.2.0.
 
 ### Prompts and resources
 
@@ -96,11 +97,20 @@ Prompts: `diagnose-latest-failure`, `explain-build-slowness`, `triage-failures-t
 | --- | --- | --- |
 | `depot_list_test_results` | none public; `depot tests --output json` via the CLI | Only reachable by shelling out to the `depot` binary, which this server does not require. Needs a `DEPOT_MCP_USE_CLI` opt-in. |
 
+### Candidates added by Depot's 2026-09-08 project contract
+
+| Tool or field | Depot RPC | Assessment |
+| --- | --- | --- |
+| `buildTimeoutMinutes`, `maxConcurrentBuilds` on the project tools | `GetProject`, `CreateProject`, `UpdateProject` | Should ship. Clearing a value uses a nullable int wrapper whose JSON encoding must be checked first. |
+| Registry retention policy, read and update | `GetRegistryRetentionPolicy`, `UpdateRegistryRetentionPolicy` | Read folds into `depot_get_project`; update is a reversible write behind the flag. |
+| `depot_reset_project_machines` | `ResetProjectMachines` | Terminates builder machines but keeps the cache, so the `ResetProject` exclusion does not cover it. Open question: the two names sound alike to a model. |
+| `UpdateTrustPolicy` | `ProjectService/UpdateTrustPolicy` | Excluded with the other trust policy writes: it grants access. |
+
 Deliberately not added: standalone secret and variable getters (the list tools with filters already answer the question), organization details (no RPC beyond `ListOrganizations`, which Organization tokens cannot call), and the log streaming RPCs (Depot caps concurrent streams per organization, so a careless tool could starve real CI).
 
 ## Verification still owed
 
-- The apply path of every write tool, against a throwaway run in a trial organization, with explicit approval.
+- The apply path of `depot_stop_sandbox` and `depot_kill_sandbox`, which needs a sandbox in the trial organization. Every other write was applied there on 2026-09-08.
 - Beta tools with a user token.
 - `GetJob` carries no dependency-job list despite the API survey; if Depot adds one, `depot_get_ci_job` should surface it.
 
