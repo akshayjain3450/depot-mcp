@@ -6,8 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `docs/next-releases.md`: the plan for 0.2.2, 0.3.0 and 0.4.0, compiled from live research on 2026-09-17 and rebased on 2026-09-21. It records what changed at Depot since the API survey was written, where the MCP ecosystem has moved, the effort and dates for each release, what is parked and why, and how to resume.
+
 ### Changed
 
+- The README configuration table listed `DEPOT_MCP_ALLOW_WRITES` three times with three different descriptions, one of which still said the flag was reserved for a future version and currently a no-op. One row remains.
+- The README limitations said there is no tool that waits for a run to finish, which `depot_wait_for_ci_run` has contradicted since 0.2.0. It now describes the bounded poll.
+- `docs/roadmap.md` said no mutating RPC had been called against Depot and that two write helpers existed. Both were true on 2026-09-06 and have not been since 0.2.0; the roadmap also now lists the candidates Depot's 2026-09-08 project contract introduced.
+- Both research files carry a dated addendum: the API survey never covered the sandbox service behind four shipped tools and predates the 2026-09-08 project contract, the Origin forge and the move of the protos to `depot/proto`; the design note still excluded the project write tools that have since shipped.
 - README, package metadata, the Docker image label, the server instructions, SECURITY.md, and CONTRIBUTING.md describe the server as read-only by default with opt-in write tools, instead of read-only. The README's status bullets, Agent Skills comparison, token matrix, write-tool table, and security section each carried two or three versions of the same line from successive write releases; each is now one line that matches the registered tools, and the verification note records that every write except sandbox stop and kill has been applied live.
 
 ### Fixed
