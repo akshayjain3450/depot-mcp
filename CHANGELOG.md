@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `npm run verify:project` added a read-only check for one explicitly confirmed project and one completed build from its recent history. It rejects other RPCs and project/build IDs before sending requests, disables redirects and writes, and reports counts without private build content. The full verifier's project default did not restrict its organization-wide discovery.
+
 ### Changed
 
 - README, package metadata, the Docker image label, the server instructions, SECURITY.md, and CONTRIBUTING.md describe the server as read-only by default with opt-in write tools, instead of read-only. The README's status bullets, Agent Skills comparison, token matrix, write-tool table, and security section each carried two or three versions of the same line from successive write releases; each is now one line that matches the registered tools, and the verification note records that every write except sandbox stop and kill has been applied live.

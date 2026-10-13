@@ -9,6 +9,38 @@ The unit tests prove the server against recorded fixtures. This page is about th
 
 ## 1. Prepare `.env`
 
+For a shared organization where only one container-build project is authorized, use the narrower
+check instead of the full matrix:
+
+```bash
+npm run verify:project -- --project-id <approved-project-id> --project-name <exact-project-name>
+```
+
+Set `DEPOT_TOKEN` to the organization token, `DEPOT_ORG_ID` to its organization ID, and
+`DEPOT_PROJECT_ID` to the same ID explicitly passed on the command line. Keep
+`DEPOT_MCP_ALLOW_WRITES`, `DEPOT_MCP_ALLOW_DESTRUCTIVE`, `DEPOT_MCP_ENABLE_BETA`, and
+`DEPOT_MCP_VERIFY_APPLY` unset or `0`, and use the default Depot API URL. The check rejects
+conflicting configuration before making a request. It only uses `DEPOT_TOKEN`.
+
+The check reads that exact project's identity, verifies its ID, name and organization, then reads
+one page of 10 builds from that project. It selects a completed failed build when available,
+otherwise a successful one, and exercises `depot_get_build` and `depot_diagnose_build` through
+the MCP client. An empty project or a page with no completed build stops the check; it never
+searches another project. No project or build is created.
+
+A transport allowlist checks the exact RPC, organization header and JSON or protobuf body before
+every request. Only `GetProject`, `ListBuilds`, `GetBuild`, `GetBuildSteps`, and `GetBuildStepLogs`
+for the approved targets are allowed. Redirects are disabled. There are at most 18 outbound
+requests including retries, one page each of steps and logs, and 20 log-tail lines. The report
+contains only availability flags, counts, and RPC names; build commands, log lines, IDs, and
+server messages are not printed or saved. This is a bounded sample, not an exhaustive diagnosis
+or the full release matrix. A live success does not force or prove transient-error recovery;
+the offline regression tests exercise that behavior.
+
+The ordinary `verify` and `smoke` commands are broader: `DEPOT_PROJECT_ID` is a default, not an
+access restriction. The full verifier enables write and beta tools to test previews, and its
+apply gate is organization-scoped. Do not use those commands where only one project is authorized.
+
 `.env` is gitignored and read by `tsx --env-file-if-exists`. Nothing in it is ever printed: the script masks token-shaped strings and reduces URLs to their host before writing a line.
 
 | Variable | Token kind | Where to create it | Needed for |
