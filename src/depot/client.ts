@@ -165,6 +165,9 @@ export class DepotClient {
       try {
         return await this.attempt(target, request, deadline);
       } catch (error) {
+        if (error instanceof DepotApiError) {
+          error.attempts = attempt;
+        }
         if (!isDepotRequestError(error) || !error.retryable || attempt >= this.maxAttempts) {
           throw error;
         }

@@ -218,6 +218,36 @@ function timeoutError(): Error {
 }
 
 describe('DepotClient retry policy', () => {
+  it.each([
+    { label: 'default attempt limit', options: {}, attempts: 3, sleeps: [250, 750] },
+    { label: 'configured attempt limit', options: { maxAttempts: 2 }, attempts: 2, sleeps: [250] },
+    { label: 'call deadline', options: { callDeadlineMs: 1_000 }, attempts: 2, sleeps: [250] },
+  ])('bounds transient build-step retries by the $label and records attempts', async (testCase) => {
+    const clock = fakeClock();
+    const replies = headerFetch([
+      { status: 500, body: '{"code":"internal","message":"Error fetching build steps"}' },
+    ]);
+    const failing = new DepotClient({
+      token: 'test-token-never-logged',
+      apiUrl: 'https://api.depot.dev',
+      fetch: replies.fetch,
+      sleep: clock.sleep,
+      now: clock.now,
+      ...testCase.options,
+    });
+
+    await expect(failing.callBinary(
+      { service: 'depot.build.v1.BuildService', method: 'GetBuildSteps' },
+      new Uint8Array(),
+    )).rejects.toMatchObject({
+      code: 'internal',
+      attempts: testCase.attempts,
+      serverMessage: 'Error fetching build steps',
+    });
+    expect(replies.calls).toBe(testCase.attempts);
+    expect(clock.sleeps).toEqual(testCase.sleeps);
+  });
+
   it('waits the Retry-After delay, in seconds, on a 429', async () => {
     const clock = fakeClock();
     const replies = headerFetch([

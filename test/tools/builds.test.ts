@@ -229,8 +229,35 @@ describe('depot_list_builds', () => {
 });
 
 describe('depot_diagnose_build when Depot cannot serve step data', () => {
+  it('returns the steps when a transient 500 succeeds on the second attempt', async () => {
+    harness = await createHarness({
+      routes: {
+        ...buildRoutes,
+        [RPC.getBuildSteps]: [
+          connectError(500, 'internal', 'Error fetching build steps'),
+          ok(fixture('build-steps')),
+        ],
+      },
+    });
 
-  it('still returns the build-level facts when GetBuildSteps fails server-side', async () => {
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_4a91c7',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structured).not.toHaveProperty('stepsUnavailable');
+    expect(result.structured.stepCount).toBe(4);
+    expect(asRecord(result.structured.failingStep)).toMatchObject({ digest: 'sha256:33cc' });
+    expect(result.text).toContain('exit code: 2');
+    expect(result.text).toContain('error TS2345');
+    expect(result.structured.notes).toEqual([]);
+    expect(harness.callsTo(RPC.getBuildSteps)).toHaveLength(2);
+    expect(harness.callsTo(RPC.getBuild)).toHaveLength(1);
+    expect(harness.sleeps).toEqual([250]);
+  });
+
+  it('returns build-level facts and the attempt count after all three step requests fail', async () => {
     harness = await createHarness({
       routes: {
         [RPC.getBuild]: ok(fixture('build')),
@@ -248,6 +275,32 @@ describe('depot_diagnose_build when Depot cannot serve step data', () => {
     expect(result.structured.stepCount).toBe(0);
     expect(result.text).toContain('could not return the steps');
     expect(result.text).toContain('Error fetching build steps');
+    expect(result.text).toContain('after 3 attempt(s) on the failed page');
+    expect(JSON.stringify(result.structured.notes)).toContain('after 3 attempt(s) on the failed page');
+    expect(asRecord(result.structured.build).status).toBe('failed');
+    expect(harness.callsTo(RPC.getBuildSteps)).toHaveLength(3);
+    expect(harness.callsTo(RPC.getBuildStepLogs)).toHaveLength(0);
+    expect(harness.sleeps).toEqual([250, 750]);
+  });
+
+  it('reports one attempt when a different internal step error is not retryable', async () => {
+    harness = await createHarness({
+      routes: {
+        ...buildRoutes,
+        [RPC.getBuildSteps]: connectError(500, 'internal', 'internal error'),
+      },
+    });
+
+    const result = await callTool(harness, 'depot_diagnose_build', {
+      buildId: 'bld_4a91c7',
+      projectId: 'proj_api7f2',
+    });
+
+    expect(result.isError).toBe(false);
+    expect(result.structured.stepsUnavailable).toBe(true);
+    expect(JSON.stringify(result.structured.notes)).toContain('after 1 attempt(s) on the failed page');
+    expect(harness.callsTo(RPC.getBuildSteps)).toHaveLength(1);
+    expect(harness.sleeps).toEqual([]);
   });
 
   it('keeps the failing step and its error when GetBuildStepLogs fails server-side', async () => {
@@ -270,6 +323,9 @@ describe('depot_diagnose_build when Depot cannot serve step data', () => {
     expect(result.text).toContain('Step to look at');
     expect(result.text).toContain("could not return the step's logs");
     expect(result.text).not.toContain('Depot reports no logs for this step');
+    expect(result.structured).not.toHaveProperty('stepsUnavailable');
+    expect(harness.callsTo(RPC.getBuildStepLogs)).toHaveLength(1);
+    expect(harness.sleeps).toEqual([]);
   });
 
   it('does not swallow non-server-side errors from the step endpoints', async () => {

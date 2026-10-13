@@ -101,6 +101,8 @@ export class DepotApiError extends Error {
   readonly retryable: boolean;
   /** Parsed from a `Retry-After` response header, when Depot sent one. */
   readonly retryAfterMs: number | undefined;
+  /** Actual attempts for this RPC request, filled in by the client's retry loop. */
+  attempts = 1;
 
   constructor(options: {
     code: ConnectErrorCode;
@@ -108,7 +110,7 @@ export class DepotApiError extends Error {
     rpc: string;
     serverMessage?: string | undefined;
     retryAfterMs?: number | undefined;
-    /** Overrides the code-derived default, for failures that retrying cannot fix. */
+    /** Overrides the code-derived default for a known transient or permanent failure. */
     retryable?: boolean | undefined;
   }) {
     const serverMessage = capServerMessage(options.serverMessage);
@@ -216,15 +218,23 @@ export function parseConnectError(
   const declaredCode = readString(envelope, 'code');
   const code =
     declaredCode !== undefined && isConnectErrorCode(declaredCode) ? declaredCode : fallbackCode;
+  const message = readString(envelope, 'message');
+  // Observed to recover on retry. Keep this specific: step logs can return a persistent
+  // "internal error", and retrying every internal failure would delay each diagnosis.
+  const transientBuildSteps =
+    target.service === 'depot.build.v1.BuildService' &&
+    target.method === 'GetBuildSteps' &&
+    httpStatus === 500 &&
+    code === 'internal' &&
+    message === 'Error fetching build steps';
 
   return new DepotApiError({
     code,
     httpStatus,
     rpc,
-    serverMessage: mapDefined(readString(envelope, 'message'), (message) =>
-      scrubSecrets(message, secrets),
-    ),
+    serverMessage: mapDefined(message, (value) => scrubSecrets(value, secrets)),
     retryAfterMs,
+    retryable: transientBuildSteps ? true : undefined,
   });
 }
 
