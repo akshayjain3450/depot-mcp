@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `depot_diagnose_build` reported steps unavailable after a transient 500 "Error fetching build steps" on builds `bnhwc4l77w` and `pv87hjhn1n` on 2026-09-06, although an identical call seconds later returned all 40 steps and the failing command. The client now makes up to three attempts with its existing short backoff before falling back to build-level facts, and the note reports the actual attempt count for the failed page. The persistent step-logs 500 remains a single attempt.
 - The verification script's final apply check counted its own success as a failure: after `depot_delete_project`, `GetProject` answering `not_found` is the expected result, but it was recorded under the Depot-error kind and turned an otherwise clean `verify:apply` run into `FAIL`. It is now recorded as `ok`; a project that is still readable after the delete is recorded as an error, and error outcomes now count as failures.
 
 ## [0.2.1] - 2026-09-08

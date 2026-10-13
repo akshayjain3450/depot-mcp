@@ -81,6 +81,35 @@ describe('parseConnectError', () => {
       expect(parseConnectError(target, 500, JSON.stringify({ code })).retryable, code).toBe(false);
     }
   });
+
+  it.each([
+    ['GetBuildSteps', 'Error fetching build steps', true],
+    ['GetBuildSteps', 'internal error', false],
+    ['GetBuildStepLogs', 'internal error', false],
+    ['GetBuildStepLogs', 'Error fetching build steps', false],
+    ['CreateBuild', 'Error fetching build steps', false],
+  ])('classifies internal 500 from %s (%s) as retryable=%s', (method, message, retryable) => {
+    const error = parseConnectError(
+      { service: 'depot.build.v1.BuildService', method },
+      500,
+      JSON.stringify({ code: 'internal', message }),
+    );
+
+    expect(error.retryable).toBe(retryable);
+  });
+
+  it('does not broaden retries to other services, statuses, or permanent codes', () => {
+    const steps = { service: 'depot.build.v1.BuildService', method: 'GetBuildSteps' };
+    const message = 'Error fetching build steps';
+    const body = JSON.stringify({ code: 'internal', message });
+
+    expect(parseConnectError({ ...steps, service: 'other.Service' }, 500, body).retryable).toBe(false);
+    expect(parseConnectError(steps, 400, body).retryable).toBe(false);
+    expect(
+      parseConnectError(steps, 500, JSON.stringify({ code: 'permission_denied', message })).retryable,
+    ).toBe(false);
+    expect(parseConnectError(steps, 500, 'Internal Server Error').retryable).toBe(false);
+  });
 });
 
 describe('formatDepotError', () => {

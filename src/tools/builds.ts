@@ -251,7 +251,7 @@ Read-only: this cannot start, retry, or cancel a build. Container builds cannot 
       }
       stepsUnavailable = true;
       notes.push(
-        `Depot could not return this build's steps (server-side ${error.code}: ${error.serverMessage ?? 'no detail'}). Only the build-level facts from GetBuild are available; the Depot dashboard's build page may still show the steps.`,
+        `Depot could not return this build's steps after ${error.attempts} attempt(s) on the failed page (server-side ${error.code}: ${error.serverMessage ?? 'no detail'}). Only the build-level facts from GetBuild are available; the Depot dashboard's build page may still show the steps.`,
       );
     }
     const failing = selectFailingStep(steps);
